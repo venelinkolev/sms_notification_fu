@@ -413,13 +413,14 @@ class KasiExtractor:
         """Тест с pyodbc за Windows"""
         import pyodbc  # Local import само когато е нужно
         
-        # За стари .mdb файлове (преди 2007) използваме различни connection strings
+        # За стари .mdb файлове използваме специфични ODBC connection strings
         connection_attempts = [
-            # За стари .mdb файлове (Jet Engine)
-            f'Provider=Microsoft.Jet.OLEDB.4.0;Data Source={self.mdb_file_path.get()};',
+            # За стари .mdb файлове (Jet 4.0)
             f'DRIVER={{Microsoft Access Driver (*.mdb)}};DBQ={self.mdb_file_path.get()};',
-            # За нови файлове (ACE Engine)
-            f'Provider=Microsoft.ACE.OLEDB.12.0;Data Source={self.mdb_file_path.get()};',
+            f'DRIVER={{Microsoft Access Driver (*.mdb)}};DBQ={self.mdb_file_path.get()};PWD=;',
+            # Опит с пълен път
+            f'DRIVER={{Microsoft Access Driver (*.mdb)}};DBQ={os.path.abspath(self.mdb_file_path.get())};',
+            # За нови файлове (ACE)
             f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
         ]
         
@@ -427,26 +428,33 @@ class KasiExtractor:
             try:
                 print(f"Опит {i+1}: {conn_str}")
                 self.update_status_bar(f"Опит {i+1} за свързване...")
-                conn = pyodbc.connect(conn_str)
+                
+                # Важно: Добавяме timeout
+                conn = pyodbc.connect(conn_str, timeout=10)
                 
                 cursor = conn.cursor()
                 tables = [table_info.table_name for table_info in cursor.tables(tableType='TABLE')]
                 conn.close()
                 
-                # Запазваме работещия connection string за бъдещо използване
+                # Запазваме работещия connection string
                 self.working_conn_str = conn_str
                 self._show_tables_result(tables)
+                messagebox.showinfo("Успех", f"Връзката е успешна с connection string #{i+1}")
                 return
                 
             except Exception as e:
-                print(f"Опит {i+1} неуспешен: {str(e)}")
+                error_details = str(e)
+                print(f"Опит {i+1} неуспешен: {error_details}")
                 continue
         
-        # Ако нито един опит не е успешен
+        # Ако всички опити са неуспешни
         messagebox.showerror("Грешка", 
-                            f"Не можах да се свържа със стария .mdb файл.\n\n"
-                            f"За стари Access бази (преди 2007) може да е нужен\n"
-                            f"Microsoft Jet OLEDB 4.0 Provider.")
+                            f"Всички опити за свързване са неуспешни.\n\n"
+                            f"Възможни причини:\n"
+                            f"• Файлът е повреден или заключен\n"
+                            f"• Несъвместимост на архитектурата (32-bit/64-bit)\n"
+                            f"• Нужни са специални права за достъп\n\n"
+                            f"Файл: {os.path.basename(self.mdb_file_path.get())}")
         self.update_status_bar("Всички опити за свързване неуспешни")
 
     def _test_with_mdb_tools(self):
