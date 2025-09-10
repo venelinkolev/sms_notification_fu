@@ -411,26 +411,7 @@ class KasiExtractor:
         import pyodbc  # Local import само когато е нужно
         """Тест с pyodbc за Windows"""
         try:
-            # Опитваме различни драйвери по реда на приоритет
-            driver_options = [
-                'Microsoft Access Driver (*.mdb, *.accdb)',
-                'Microsoft Access Driver (*.mdb)',
-                'Microsoft Access Driver (*.accdb)',
-                'Microsoft Office Access Driver (*.mdb, *.accdb)',
-                'Microsoft Office 16.0 Access Database Engine OLE DB Provider'
-            ]
-
-            conn = None
-            for driver in driver_options:
-                try:
-                    conn_str = f'DRIVER={{{driver}}};DBQ={self.mdb_file_path.get()};'
-                    conn = pyodbc.connect(conn_str)
-                    break  # Ако успее, спираме тук
-                except:
-                    continue  # Опитваме следващия драйвер
-
-            if conn is None:
-                raise Exception("Не може да се намери подходящ Access драйвер")
+            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
             
@@ -569,26 +550,7 @@ class KasiExtractor:
             start_date = datetime.strptime(start_date_str, '%d.%m.%Y')
             end_date = datetime.strptime(end_date_str, '%d.%m.%Y')
             
-            # Опитваме различни драйвери по реда на приоритет
-            driver_options = [
-                'Microsoft Access Driver (*.mdb, *.accdb)',
-                'Microsoft Access Driver (*.mdb)',
-                'Microsoft Access Driver (*.accdb)',
-                'Microsoft Office Access Driver (*.mdb, *.accdb)',
-                'Microsoft Office 16.0 Access Database Engine OLE DB Provider'
-            ]
-
-            conn = None
-            for driver in driver_options:
-                try:
-                    conn_str = f'DRIVER={{{driver}}};DBQ={self.mdb_file_path.get()};'
-                    conn = pyodbc.connect(conn_str)
-                    break  # Ако успее, спираме тук
-                except:
-                    continue  # Опитваме следващия драйвер
-
-            if conn is None:
-                raise Exception("Не може да се намери подходящ Access драйвер")
+            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
             
@@ -871,26 +833,7 @@ class KasiExtractor:
         import pyodbc  # Local import само когато е нужно
         """Пълен експорт с pyodbc за Windows"""
         try:
-            # Опитваме различни драйвери по реда на приоритет
-            driver_options = [
-                'Microsoft Access Driver (*.mdb, *.accdb)',
-                'Microsoft Access Driver (*.mdb)',
-                'Microsoft Access Driver (*.accdb)',
-                'Microsoft Office Access Driver (*.mdb, *.accdb)',
-                'Microsoft Office 16.0 Access Database Engine OLE DB Provider'
-            ]
-
-            conn = None
-            for driver in driver_options:
-                try:
-                    conn_str = f'DRIVER={{{driver}}};DBQ={self.mdb_file_path.get()};'
-                    conn = pyodbc.connect(conn_str)
-                    break  # Ако успее, спираме тук
-                except:
-                    continue  # Опитваме следващия драйвер
-
-            if conn is None:
-                raise Exception("Не може да се намери подходящ Access драйвер")
+            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
             
