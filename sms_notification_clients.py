@@ -53,6 +53,8 @@ class KasiExtractor:
         # Задаваме днешни дати като по подразбиране
         self.set_default_dates()
 
+        self.working_conn_str = None  # За запазване на работещия connection string
+
     def validate_date_input(self, date_string):
         """Валидира дата в формат dd.mm.yyyy"""
         if not date_string.strip():
@@ -408,21 +410,44 @@ class KasiExtractor:
             self._test_with_mdb_tools()
 
     def _test_with_pyodbc(self):
-        import pyodbc  # Local import само когато е нужно
         """Тест с pyodbc за Windows"""
-        try:
-            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
-            conn = pyodbc.connect(conn_str)
-            cursor = conn.cursor()
-            
-            tables = [table_info.table_name for table_info in cursor.tables(tableType='TABLE')]
-            conn.close()
-            
-            self._show_tables_result(tables)
-            
-        except Exception as e:
-            messagebox.showerror("Грешка", f"Не можах да се свържа с базата:\n{str(e)}")
-            self.update_status_bar("Грешка при свързване с базата")
+        import pyodbc  # Local import само когато е нужно
+        
+        # За стари .mdb файлове (преди 2007) използваме различни connection strings
+        connection_attempts = [
+            # За стари .mdb файлове (Jet Engine)
+            f'Provider=Microsoft.Jet.OLEDB.4.0;Data Source={self.mdb_file_path.get()};',
+            f'DRIVER={{Microsoft Access Driver (*.mdb)}};DBQ={self.mdb_file_path.get()};',
+            # За нови файлове (ACE Engine)
+            f'Provider=Microsoft.ACE.OLEDB.12.0;Data Source={self.mdb_file_path.get()};',
+            f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
+        ]
+        
+        for i, conn_str in enumerate(connection_attempts):
+            try:
+                print(f"Опит {i+1}: {conn_str}")
+                self.update_status_bar(f"Опит {i+1} за свързване...")
+                conn = pyodbc.connect(conn_str)
+                
+                cursor = conn.cursor()
+                tables = [table_info.table_name for table_info in cursor.tables(tableType='TABLE')]
+                conn.close()
+                
+                # Запазваме работещия connection string за бъдещо използване
+                self.working_conn_str = conn_str
+                self._show_tables_result(tables)
+                return
+                
+            except Exception as e:
+                print(f"Опит {i+1} неуспешен: {str(e)}")
+                continue
+        
+        # Ако нито един опит не е успешен
+        messagebox.showerror("Грешка", 
+                            f"Не можах да се свържа със стария .mdb файл.\n\n"
+                            f"За стари Access бази (преди 2007) може да е нужен\n"
+                            f"Microsoft Jet OLEDB 4.0 Provider.")
+        self.update_status_bar("Всички опити за свързване неуспешни")
 
     def _test_with_mdb_tools(self):
         """Тест с mdb-tools за Linux"""
@@ -550,7 +575,9 @@ class KasiExtractor:
             start_date = datetime.strptime(start_date_str, '%d.%m.%Y')
             end_date = datetime.strptime(end_date_str, '%d.%m.%Y')
             
-            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
+            # Използваме запазения работещ connection string или fallback за стари файлове
+            conn_str = self.working_conn_str or f'Provider=Microsoft.Jet.OLEDB.4.0;Data Source={self.mdb_file_path.get()};'
+            # conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
             
@@ -833,7 +860,9 @@ class KasiExtractor:
         import pyodbc  # Local import само когато е нужно
         """Пълен експорт с pyodbc за Windows"""
         try:
-            conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
+            # Използваме запазения работещ connection string или fallback за стари файлове
+            conn_str = self.working_conn_str or f'Provider=Microsoft.Jet.OLEDB.4.0;Data Source={self.mdb_file_path.get()};'
+            # conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
             
