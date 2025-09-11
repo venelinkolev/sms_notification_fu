@@ -40,17 +40,18 @@ jobs:
           exit 1
         }
         
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
+    - name: Upload EXE artifact
+      uses: actions/upload-artifact@v4
       with:
         name: SMS_Notification_Clients_Windows
-        path: dist/SMS_Notification_Clients_v1.0.exe
-        
+        path: dist/SMS_Notification_Clients.exe
+    
     - name: Create Release (if tag)
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/SMS_Notification_Clients_v1.0.exe
+        files: dist/SMS_Notification_Clients.exe
+        generate_release_notes: true
 
 # name: Build Windows EXE
 
