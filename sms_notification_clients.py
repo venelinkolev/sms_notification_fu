@@ -28,7 +28,7 @@ class KasiExtractor:
     def __init__(self, root):
         self.root = root
         self.root.title("SMS Notification Clients v2.0 - CSV Support")
-        self.root.geometry("900x800")  # Увеличена височина за новата секция
+        self.root.geometry("900x870")  # Увеличена височина за новата секция
         self.root.resizable(True, True)
 
         self.filtered_data_lines = []  # За запазване на филтрираните данни
