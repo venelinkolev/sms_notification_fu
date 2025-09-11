@@ -1,5 +1,8 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Kasi Extractor - GUI Приложение за извличане на данни от MDB
+Етап 1: Избор на MDB файл + основна GUI структура
 """
 
 from tkinter import ttk, filedialog, messagebox
@@ -13,12 +16,14 @@ import sys
 import io
 import os
 
-try:
-    import pandas_access as mdb
-    import pandas as pd
-    PANDAS_ACCESS_AVAILABLE = True
-except ImportError:
-    PANDAS_ACCESS_AVAILABLE = False
+# Условен import за pyodbc (само на Windows)
+PYODBC_AVAILABLE = False
+if sys.platform == "win32":
+    try:
+        import pyodbc
+        PYODBC_AVAILABLE = True
+    except ImportError:
+        PYODBC_AVAILABLE = False
 
 class KasiExtractor:
     def __init__(self, root):
@@ -47,6 +52,8 @@ class KasiExtractor:
 
         # Задаваме днешни дати като по подразбиране
         self.set_default_dates()
+
+        self.working_conn_str = None  # За запазване на работещия connection string
 
     def validate_date_input(self, date_string):
         """Валидира дата в формат dd.mm.yyyy"""
@@ -203,6 +210,85 @@ class KasiExtractor:
         self.filter_result_label = ttk.Label(date_frame, text="", foreground="gray")
         self.filter_result_label.grid(row=2, column=0, columnspan=5, pady=(10, 0), sticky=tk.W)
 
+        # # 5. СЕКЦИЯ: ИЗБОР НА ДАТИ ЗА ФИЛТРИРАНЕ С КАЛЕНДАРИ
+        # date_frame = ttk.LabelFrame(main_frame, text="📅 Филтриране по дати", padding="10")
+        # date_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        # # Създаваме вътрешна рамка за по-добро подреждане
+        # inner_frame = ttk.Frame(date_frame)
+        # inner_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        # inner_frame.columnconfigure(1, weight=1)
+        # inner_frame.columnconfigure(3, weight=1)
+        
+        # # От дата
+        # ttk.Label(inner_frame, text="От дата:").grid(row=0, column=0, padx=(0, 10), sticky=tk.W)
+        # try:
+        #     self.start_date_entry = DateEntry(inner_frame, width=12, 
+        #                                      date_pattern='dd.mm.yyyy',
+        #                                      state='readonly')
+        #     self.start_date_entry.grid(row=0, column=1, padx=(0, 30), sticky=tk.W)
+        # except Exception as e:
+        #     print(f"Грешка при създаване на първия календар: {e}")
+        
+        # # До дата  
+        # ttk.Label(inner_frame, text="До дата:").grid(row=0, column=2, padx=(0, 10), sticky=tk.W)
+        # try:
+        #     self.end_date_entry = DateEntry(inner_frame, width=12,
+        #                                    date_pattern='dd.mm.yyyy',
+        #                                    state='readonly')
+        #     self.end_date_entry.grid(row=0, column=3, padx=(0, 30), sticky=tk.W)
+        # except Exception as e:
+        #     print(f"Грешка при създаване на втория календар: {e}")
+        
+        # # Бутон за филтриране на нов ред
+        # button_frame = ttk.Frame(date_frame)
+        # button_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
+        
+        # self.filter_button = ttk.Button(button_frame, text="📊 Филтрирай данните", 
+        #                                command=self.filter_data, state="disabled")
+        # self.filter_button.grid(row=0, column=0, sticky=tk.W)
+        
+        # # Инструкции
+        # instruction_label = ttk.Label(button_frame, text="← Натиснете на календара за избор на дата", 
+        #                              foreground="gray", font=("TkDefaultFont", 8))
+        # instruction_label.grid(row=0, column=1, padx=(20, 0), sticky=tk.W)
+        
+        # # Резултат от филтрирането
+        # self.filter_result_label = ttk.Label(date_frame, text="", foreground="gray")
+        # self.filter_result_label.grid(row=2, column=0, pady=(10, 0), sticky=tk.W)
+
+        # # 5. СЕКЦИЯ: ИЗБОР НА ДАТИ ЗА ФИЛТРИРАНЕ
+        # date_frame = ttk.LabelFrame(main_frame, text="📅 Филтриране по дати", padding="10")
+        # date_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        # date_frame.columnconfigure(1, weight=1)
+        # date_frame.columnconfigure(3, weight=1)
+        
+        # # От дата
+        # ttk.Label(date_frame, text="От дата (dd.mm.yyyy):").grid(row=0, column=0, padx=(0, 5), sticky=tk.W)
+        # self.start_date_entry = ttk.Entry(date_frame, width=12)
+        # self.start_date_entry.grid(row=0, column=1, padx=(0, 20), sticky=tk.W)
+        # self.start_date_entry.insert(0, "01.04.2009")  # Примерна начална дата
+        
+        # # До дата
+        # ttk.Label(date_frame, text="До дата (dd.mm.yyyy):").grid(row=0, column=2, padx=(0, 5), sticky=tk.W)
+        # self.end_date_entry = ttk.Entry(date_frame, width=12)
+        # self.end_date_entry.grid(row=0, column=3, padx=(0, 20), sticky=tk.W)
+        # self.end_date_entry.insert(0, "31.12.2009")  # Примерна крайна дата
+        
+        # # Бутон за филтриране
+        # self.filter_button = ttk.Button(date_frame, text="📊 Филтрирай данните", 
+        #                                command=self.filter_data, state="disabled")
+        # self.filter_button.grid(row=0, column=4, padx=(20, 0))
+        
+        # # Инструкции
+        # instruction_label = ttk.Label(date_frame, text="Формат: dd.mm.yyyy (например: 01.08.2025)", 
+        #                              foreground="gray", font=("TkDefaultFont", 8))
+        # instruction_label.grid(row=1, column=0, columnspan=4, pady=(5, 0), sticky=tk.W)
+        
+        # # Резултат от филтрирането
+        # self.filter_result_label = ttk.Label(date_frame, text="", foreground="gray")
+        # self.filter_result_label.grid(row=2, column=0, columnspan=5, pady=(10, 0), sticky=tk.W)
+
         # 6. СЕКЦИЯ: ИЗВЛИЧАНЕ НА КОНКРЕТНИ КОЛОНИ
         extract_frame = ttk.LabelFrame(main_frame, text="📋 Извличане на данни", padding="10")
         extract_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
@@ -315,20 +401,78 @@ class KasiExtractor:
             messagebox.showerror("Грешка", "Моля изберете MDB файл първо!")
             return
         
-        if not PANDAS_ACCESS_AVAILABLE:
-            messagebox.showerror("Грешка", "pandas_access не е инсталиран! Моля инсталирайте го с: pip install pandas_access")
-            return
-        
         self.update_status_bar("Тестване на връзката с базата...")
         
+        # На Windows използваме pyodbc, на Linux - mdb-tools
+        if sys.platform == "win32" and PYODBC_AVAILABLE:
+            self._test_with_pyodbc()
+        else:
+            self._test_with_mdb_tools()
+
+    def _test_with_pyodbc(self):
+        """Тест с pyodbc за Windows"""
+        import pyodbc  # Local import само когато е нужно
+        
+        # За стари .mdb файлове използваме специфични ODBC connection strings
+        connection_attempts = [
+            # За стари .mdb файлове (Jet 4.0)
+            f'DRIVER={{Microsoft Access Driver (*.mdb)}};DBQ={self.mdb_file_path.get()};',
+            f'DRIVER={{Microsoft Access Driver (*.mdb)}};DBQ={self.mdb_file_path.get()};PWD=;',
+            # Опит с пълен път
+            f'DRIVER={{Microsoft Access Driver (*.mdb)}};DBQ={os.path.abspath(self.mdb_file_path.get())};',
+            # За нови файлове (ACE)
+            f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
+        ]
+        
+        for i, conn_str in enumerate(connection_attempts):
+            try:
+                print(f"Опит {i+1}: {conn_str}")
+                self.update_status_bar(f"Опит {i+1} за свързване...")
+                
+                # Важно: Добавяме timeout
+                conn = pyodbc.connect(conn_str, timeout=10)
+                
+                cursor = conn.cursor()
+                tables = [table_info.table_name for table_info in cursor.tables(tableType='TABLE')]
+                conn.close()
+                
+                # Запазваме работещия connection string
+                self.working_conn_str = conn_str
+                self._show_tables_result(tables)
+                messagebox.showinfo("Успех", f"Връзката е успешна с connection string #{i+1}")
+                return
+                
+            except Exception as e:
+                error_details = str(e)
+                print(f"Опит {i+1} неуспешен: {error_details}")
+                continue
+        
+        # Ако всички опити са неуспешни
+        messagebox.showerror("Грешка", 
+                            f"Всички опити за свързване са неуспешни.\n\n"
+                            f"Възможни причини:\n"
+                            f"• Файлът е повреден или заключен\n"
+                            f"• Несъвместимост на архитектурата (32-bit/64-bit)\n"
+                            f"• Нужни са специални права за достъп\n\n"
+                            f"Файл: {os.path.basename(self.mdb_file_path.get())}")
+        self.update_status_bar("Всички опити за свързване неуспешни")
+
+    def _test_with_mdb_tools(self):
+        """Тест с mdb-tools за Linux"""
         try:
-            # Използваме pandas_access
-            tables = list(mdb.list_tables(self.mdb_file_path.get()))
+            result = subprocess.run(["mdb-tables", self.mdb_file_path.get()], 
+                                capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                messagebox.showerror("Грешка", f"Не можах да чета базата:\n{result.stderr}")
+                return
+            
+            tables = result.stdout.strip().split()
             self._show_tables_result(tables)
             
-        except Exception as e:
-            messagebox.showerror("Грешка", f"Неочаквана грешка:\n{str(e)}")
-            self.update_status_bar(f"Грешка: {str(e)}")
+        except FileNotFoundError:
+            messagebox.showerror("Грешка", "mdb-tools не е намерен!")
+            self.update_status_bar("Грешка: mdb-tools не е инсталиран")
 
     def _show_tables_result(self, tables):
         """Показва резултата от намерените таблици"""
@@ -343,15 +487,64 @@ class KasiExtractor:
                                 f"Таблица 'Kasi_all' не е намерена!\n\n"
                                 f"Налични таблици:\n" + "\n".join(tables))
             self.update_status_bar("⚠️ Таблица 'Kasi_all' не е намерена")
+
+    # def test_database_connection(self):
+    #     """Тества връзката с базата данни и показва таблиците"""
+    #     if not self.mdb_file_path.get():
+    #         messagebox.showerror("Грешка", "Моля изберете MDB файл първо!")
+    #         return
+        
+    #     self.update_status_bar("Тестване на връзката с базата...")
+        
+    #     try:
+    #         # Проверяваме дали mdb-tables е инсталиран
+    #         result = subprocess.run(["mdb-tables", "--help"], 
+    #                                capture_output=True, text=True)
+    #         if result.returncode != 0:
+    #             raise FileNotFoundError("mdb-tables не работи")
+    #     except FileNotFoundError:
+    #         messagebox.showerror("Грешка", 
+    #                            "mdb-tools не е намерен!\n\n"
+    #                            "Моля инсталирайте mdb-tools:\n"
+    #                            "- Windows: choco install mdb-tools\n"
+    #                            "- Ubuntu: sudo apt-get install mdb-tools")
+    #         self.update_status_bar("Грешка: mdb-tools не е инсталиран")
+    #         return
+        
+    #     try:
+    #         # Списък на таблиците
+    #         result = subprocess.run(["mdb-tables", self.mdb_file_path.get()], 
+    #                                capture_output=True, text=True)
+            
+    #         if result.returncode != 0:
+    #             messagebox.showerror("Грешка", f"Не можах да чета базата:\n{result.stderr}")
+    #             self.update_status_bar("Грешка при четене на базата")
+    #             return
+            
+    #         tables = result.stdout.strip().split()
+            
+    #         if "Kasi_all" in tables:
+    #             messagebox.showinfo("Успех", 
+    #                                f"✅ Връзката е успешна!\n\n"
+    #                                f"Намерени таблици: {len(tables)}\n"
+    #                                f"Таблица 'Kasi_all': ✅ Намерена\n\n"
+    #                                f"Всички таблици:\n" + "\n".join(tables[:10]) + 
+    #                                (f"\n... и още {len(tables)-10}" if len(tables) > 10 else ""))
+    #             self.update_status_bar("✅ Базата е готова за работа")
+    #         else:
+    #             messagebox.showwarning("Внимание", 
+    #                                   f"Таблица 'Kasi_all' не е намерена!\n\n"
+    #                                   f"Налични таблици:\n" + "\n".join(tables))
+    #             self.update_status_bar("⚠️ Таблица 'Kasi_all' не е намерена")
+                
+    #     except Exception as e:
+    #         messagebox.showerror("Грешка", f"Неочаквана грешка:\n{str(e)}")
+    #         self.update_status_bar(f"Грешка: {str(e)}")
     
     def filter_data(self):
         """Филтрира данните по избраните дати"""
         if not self.mdb_file_path.get():
             messagebox.showerror("Грешка", "Моля изберете MDB файл първо!")
-            return
-        
-        if not PANDAS_ACCESS_AVAILABLE:
-            messagebox.showerror("Грешка", "pandas_access не е инсталиран!")
             return
         
         try:
@@ -374,68 +567,161 @@ class KasiExtractor:
         self.update_status_bar(f"Филтриране от {start_date_str} до {end_date_str}...")
         self.root.update_idletasks()
         
+        # Използваме подходящия метод за платформата
+        if sys.platform == "win32" and PYODBC_AVAILABLE:
+            success = self._filter_data_with_pyodbc(start_date_str, end_date_str)
+        else:
+            success = self._filter_data_with_mdb_tools(start_date_str, end_date_str)
+        
+        if success:
+            self.extract_button.config(state="normal")
+
+    def _filter_data_with_pyodbc(self, start_date_str, end_date_str):
+        import pyodbc  # Local import само когато е нужно
+        """Филтриране с pyodbc за Windows"""
         try:
-            # Четене на цялата таблица с pandas_access
-            df = mdb.read_table(self.mdb_file_path.get(), "Kasi_all")
-            
-            # Парсиране на датите за филтриране
             start_date = datetime.strptime(start_date_str, '%d.%m.%Y')
             end_date = datetime.strptime(end_date_str, '%d.%m.%Y')
             
-            # Филтриране по End_Data колоната
-            if 'End_Data' not in df.columns:
-                messagebox.showerror("Грешка", "Колона 'End_Data' не е намерена в таблицата!")
-                return False
+            # Използваме запазения работещ connection string или fallback за стари файлове
+            conn_str = self.working_conn_str or f'Provider=Microsoft.Jet.OLEDB.4.0;Data Source={self.mdb_file_path.get()};'
+            # conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
+            conn = pyodbc.connect(conn_str)
+            cursor = conn.cursor()
             
-            # Конвертиране на End_Data към datetime
-            # Опитваме различни формати дати
-            try:
-                df['End_Data_parsed'] = pd.to_datetime(df['End_Data'], format='%m/%d/%y %H:%M:%S', errors='coerce')
-            except:
-                try:
-                    df['End_Data_parsed'] = pd.to_datetime(df['End_Data'], format='%m/%d/%Y %H:%M:%S', errors='coerce')
-                except:
-                    df['End_Data_parsed'] = pd.to_datetime(df['End_Data'], errors='coerce')
+            # SQL заявка с филтриране по дата
+            query = """
+            SELECT * FROM Kasi_all 
+            WHERE End_Data >= ? AND End_Data <= ?
+            """
             
-            # Филтриране по дати
-            mask = (df['End_Data_parsed'].dt.date >= start_date.date()) & \
-                (df['End_Data_parsed'].dt.date <= end_date.date())
-            filtered_df = df[mask]
+            cursor.execute(query, start_date, end_date)
+            rows = cursor.fetchall()
             
-            # Запазване на филтрираните данни като CSV lines
+            # Получаваме имената на колоните
+            columns = [column[0] for column in cursor.description]
+            
+            # Конвертираме в CSV формат
             self.filtered_data_lines = []
-            
             # Header
-            columns = list(filtered_df.columns)
-            if 'End_Data_parsed' in columns:
-                columns.remove('End_Data_parsed')  # Премахваме помощната колона
             self.filtered_data_lines.append(','.join(f'"{col}"' for col in columns))
             
             # Данни
-            for _, row in filtered_df.iterrows():
+            for row in rows:
                 csv_row = []
-                for col in columns:
-                    value = row[col]
-                    if pd.isna(value):
+                for value in row:
+                    if value is None:
                         csv_row.append('""')
                     else:
+                        # Конвертираме към string и escape-ваме кавички
                         str_value = str(value).replace('"', '""')
                         csv_row.append(f'"{str_value}"')
                 self.filtered_data_lines.append(','.join(csv_row))
             
-            total_rows = len(filtered_df)
-            original_rows = len(df)
-            percent = (total_rows/original_rows*100) if original_rows > 0 else 0
+            conn.close()
             
-            result_text = f"✅ Филтрирани {total_rows} от общо {original_rows} реда"
+            total_rows = len(self.filtered_data_lines) - 1
+            percent = 100.0  # При SQL заявка всички редове са филтрирани
+            
+            result_text = f"✅ Филтрирани {total_rows} реда"
+            detailed_result = f"{result_text} (100%)"
+            self.filter_result_label.config(text=detailed_result, foreground="green")
+            self.update_status_bar(f"Филтриране завършено: {total_rows} реда")
+            
+            messagebox.showinfo("Резултат", f"Филтрирането е завършено!\n\nПериод: {start_date_str} - {end_date_str}\nФилтрирани редове: {total_rows}")
+            return True
+            
+        except Exception as e:
+            messagebox.showerror("Грешка", f"Грешка при филтриране:\n{str(e)}")
+            self.update_status_bar(f"Грешка: {str(e)}")
+            return False
+
+    def _filter_data_with_mdb_tools(self, start_date_str, end_date_str):
+        """Филтриране с mdb-tools за Linux (запазва оригиналния код)"""
+        try:
+            start_date = datetime.strptime(start_date_str, '%d.%m.%Y')
+            end_date = datetime.strptime(end_date_str, '%d.%m.%Y')
+            
+            # Извличане на данните от таблицата
+            result = subprocess.run(["mdb-export", self.mdb_file_path.get(), "Kasi_all"], 
+                                capture_output=True, text=False)
+            
+            if result.returncode != 0:
+                messagebox.showerror("Грешка", f"Не можах да извлека данните:\n{result.stderr}")
+                self.update_status_bar("Грешка при извличане на данни")
+                return False
+            
+            # Декодиране като UTF-8
+            raw_content = result.stdout.decode('utf-8', errors='ignore')
+            lines = raw_content.strip().split('\n')
+            
+            if len(lines) < 2:
+                messagebox.showwarning("Внимание", "Таблицата е празна или няма данни")
+                return False
+            
+            # [Запазва целия оригинален код за филтриране с mdb-tools...]
+            # Намираме индекса на End_Data колоната
+            header_line = lines[0]
+            header_reader = csv.reader(io.StringIO(header_line))
+            headers = next(header_reader)
+            
+            end_data_index = None
+            for i, header in enumerate(headers):
+                if 'End_Data' in header:
+                    end_data_index = i
+                    break
+            
+            if end_data_index is None:
+                messagebox.showerror("Грешка", "Колона 'End_Data' не е намерена в таблицата!")
+                return False
+            
+            # Филтриране на данните
+            filtered_lines = [lines[0]]  # Добавяме header-а
+            total_rows = 0
+            filtered_rows = 0
+            
+            for line in lines[1:]:
+                total_rows += 1
+                try:
+                    reader = csv.reader(io.StringIO(line))
+                    fields = next(reader)
+                    
+                    if len(fields) > end_data_index:
+                        end_data_str = fields[end_data_index].strip()
+                        
+                        if end_data_str and len(end_data_str) >= 8:
+                            date_part = end_data_str.split()[0]
+                            
+                            row_date = None
+                            try:
+                                temp_date = datetime.strptime(date_part, '%m/%d/%y')
+                                if temp_date.year < 1950:
+                                    temp_date = temp_date.replace(year=temp_date.year + 100)
+                                row_date = temp_date
+                            except ValueError:
+                                for date_format in ['%m.%d.%Y', '%d.%m.%Y', '%Y-%m-%d', '%m/%d/%Y']:
+                                    try:
+                                        row_date = datetime.strptime(date_part, date_format)
+                                        break
+                                    except ValueError:
+                                        continue
+                            
+                            if row_date:
+                                if start_date.date() <= row_date.date() <= end_date.date():
+                                    filtered_lines.append(line)
+                                    filtered_rows += 1
+                except Exception as e:
+                    continue
+            
+            self.filtered_data_lines = filtered_lines
+            
+            percent = (filtered_rows/total_rows*100) if total_rows > 0 else 0
+            result_text = f"✅ Филтрирани {filtered_rows} от общо {total_rows} реда"
             detailed_result = f"{result_text} ({percent:.1f}%)"
             self.filter_result_label.config(text=detailed_result, foreground="green")
-            self.update_status_bar(f"Филтриране завършено: {total_rows} от {original_rows} реда ({percent:.1f}%)")
+            self.update_status_bar(f"Филтриране завършено: {filtered_rows} от {total_rows} реда ({percent:.1f}%)")
             
-            messagebox.showinfo("Резултат", f"Филтрирането е завършено!\n\nПериод: {start_date_str} - {end_date_str}\nОбщо редове: {original_rows}\nФилтрирани редове: {total_rows}")
-            
-            # Активираме бутона за извличане
-            self.extract_button.config(state="normal")
+            messagebox.showinfo("Резултат", f"Филтрирането е завършено!\n\nПериод: {start_date_str} - {end_date_str}\nОбщо редове: {total_rows}\nФилтрирани редове: {filtered_rows}")
             return True
             
         except Exception as e:
@@ -551,10 +837,6 @@ class KasiExtractor:
             messagebox.showerror("Грешка", "Моля изберете MDB файл първо!")
             return
         
-        if not PANDAS_ACCESS_AVAILABLE:
-            messagebox.showerror("Грешка", "pandas_access не е инсталиран!")
-            return
-        
         # Избор на файл за запис
         file_path = filedialog.asksaveasfilename(
             title="Експортирай цяла таблица като CSV",
@@ -569,25 +851,47 @@ class KasiExtractor:
         try:
             self.update_status_bar("Експортиране на цялата таблица...")
             
-            # Четене на цялата таблица с pandas_access
-            df = mdb.read_table(self.mdb_file_path.get(), "Kasi_all")
+            # Използваме подходящия метод за платформата
+            if sys.platform == "win32" and PYODBC_AVAILABLE:
+                success = self._export_full_table_with_pyodbc(file_path)
+            else:
+                success = self._export_full_table_with_mdb_tools(file_path)
             
-            # Поправяме кодировката на всички string колони
-            for column in df.columns:
-                if df[column].dtype == 'object':  # string колони
-                    df[column] = df[column].astype(str).apply(
-                        lambda x: self.fix_encoding_utf8_to_windows1251(x) if x != 'nan' else ''
-                    )
+            if success:
+                self.update_status_bar(f"Пълен експорт завършен: {os.path.basename(file_path)}")
             
-            # Записваме директно с pandas
-            df.to_csv(file_path, index=False, encoding='utf-8')
+        except Exception as e:
+            messagebox.showerror("Грешка", f"Грешка при пълен експорт:\n{str(e)}")
+            self.update_status_bar(f"Грешка: {str(e)}")
+
+    def _export_full_table_with_pyodbc(self, file_path):
+        import pyodbc  # Local import само когато е нужно
+        """Пълен експорт с pyodbc за Windows"""
+        try:
+            # Използваме запазения работещ connection string или fallback за стари файлове
+            conn_str = self.working_conn_str or f'Provider=Microsoft.Jet.OLEDB.4.0;Data Source={self.mdb_file_path.get()};'
+            # conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={self.mdb_file_path.get()};'
+            conn = pyodbc.connect(conn_str)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM Kasi_all")
+            rows = cursor.fetchall()
+            columns = [column[0] for column in cursor.description]
+            
+            # Записваме файла
+            with open(file_path, 'w', encoding='utf-8', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(columns)  # Header
+                
+                for row in rows:
+                    writer.writerow(row)
+            
+            conn.close()
             
             # Статистики
-            total_rows = len(df)
-            total_columns = len(df.columns)
+            total_rows = len(rows)
             file_size = os.path.getsize(file_path)
-            
-            self.update_status_bar(f"Пълен експорт завършен: {os.path.basename(file_path)}")
+            total_columns = len(columns)
             
             messagebox.showinfo("Успех", 
                             f"Пълният експорт е завършен успешно!\n\n"
@@ -596,10 +900,69 @@ class KasiExtractor:
                             f"📋 Колони: {total_columns}\n"
                             f"💾 Размер: {file_size / 1024 / 1024:.1f} MB\n"
                             f"🔗 Път: {file_path}")
+            return True
             
         except Exception as e:
-            messagebox.showerror("Грешка", f"Грешка при пълен експорт:\n{str(e)}")
-            self.update_status_bar(f"Грешка: {str(e)}")
+            messagebox.showerror("Грешка", f"Грешка при експорт с pyodbc:\n{str(e)}")
+            return False
+
+    def _export_full_table_with_mdb_tools(self, file_path):
+        """Пълен експорт с mdb-tools за Linux (запазва оригиналния код)"""
+        try:
+            # Извличане на всички данни от таблицата
+            result = subprocess.run(["mdb-export", self.mdb_file_path.get(), "Kasi_all"], 
+                                capture_output=True, text=False)
+            
+            if result.returncode != 0:
+                messagebox.showerror("Грешка", f"Не можах да експортирам таблицата:\n{result.stderr}")
+                return False
+            
+            # Декодиране като UTF-8
+            raw_content = result.stdout.decode('utf-8', errors='ignore')
+            lines = raw_content.strip().split('\n')
+            
+            if len(lines) < 1:
+                messagebox.showwarning("Внимание", "Таблицата е празна")
+                return False
+            
+            # Поправяме кодировката на всички редове
+            fixed_lines = []
+            
+            for i, line in enumerate(lines):
+                if i == 0:
+                    # Header остава както е
+                    fixed_lines.append(line)
+                else:
+                    # Поправяме българските текстове
+                    fixed_line = self.fix_encoding_utf8_to_windows1251(line)
+                    fixed_lines.append(fixed_line)
+            
+            # Записваме файла
+            with open(file_path, 'w', encoding='utf-8', newline='') as f:
+                for line in fixed_lines:
+                    f.write(line + '\n')
+            
+            # Статистики
+            total_rows = len(fixed_lines) - 1  # Без header
+            file_size = os.path.getsize(file_path)
+            
+            # Броим колоните
+            header_reader = csv.reader(io.StringIO(fixed_lines[0]))
+            headers = next(header_reader)
+            total_columns = len(headers)
+            
+            messagebox.showinfo("Успех", 
+                            f"Пълният експорт е завършен успешно!\n\n"
+                            f"📁 Файл: {os.path.basename(file_path)}\n"
+                            f"📊 Редове: {total_rows:,}\n"
+                            f"📋 Колони: {total_columns}\n"
+                            f"💾 Размер: {file_size / 1024 / 1024:.1f} MB\n"
+                            f"🔗 Път: {file_path}")
+            return True
+            
+        except Exception as e:
+            messagebox.showerror("Грешка", f"Грешка при експорт с mdb-tools:\n{str(e)}")
+            return False
 
     def update_status_bar(self, message):
         """Обновява статус бара"""
