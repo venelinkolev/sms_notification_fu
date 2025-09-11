@@ -26,9 +26,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install pandas pandas_access pyinstaller
         
-    - name: Build EXE
+    - name: Download mdb-tools for Windows
       run: |
-        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v1.0" sms_notification_clients.py
+        # Сваляме готови Windows binaries
+        Invoke-WebRequest -Uri "https://github.com/lsgunth/mdbtools-win/archive/refs/heads/master.zip" -OutFile "mdbtools.zip"
+        Expand-Archive -Path "mdbtools.zip" -DestinationPath "mdbtools"
+        
+    - name: Build EXE with mdb-tools
+      run: |
+        # Включваме mdb-tools в build-а
+        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v1.0" --add-data "mdbtools/*;mdbtools/" sms_notification_clients.py
         
     - name: List dist directory
       run: |
