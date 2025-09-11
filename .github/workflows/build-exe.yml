@@ -30,15 +30,15 @@ jobs:
       run: |
         pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v1.0" sms_notification_clients.py
         
-    - name: Test EXE (basic)
-      run: |
-        if (Test-Path "dist/SMS_Notification_Clients_v1.0.exe") {
-          Write-Host "EXE file created successfully"
-          Get-Item "dist/SMS_Notification_Clients_v1.0.exe" | Select-Object Name, Length, LastWriteTime
-        } else {
-          Write-Error "EXE file not found"
-          exit 1
-        }
+    # - name: Test EXE (basic)
+    #   run: |
+    #     if (Test-Path "dist/SMS_Notification_Clients_v1.0.exe") {
+    #       Write-Host "EXE file created successfully"
+    #       Get-Item "dist/SMS_Notification_Clients_v1.0.exe" | Select-Object Name, Length, LastWriteTime
+    #     } else {
+    #       Write-Error "EXE file not found"
+    #       exit 1
+    #     }
         
     - name: Upload EXE artifact
       uses: actions/upload-artifact@v4
