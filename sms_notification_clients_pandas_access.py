@@ -1,11 +1,12 @@
 """
-Kasi Extractor v2.0 - GUI Приложение за извличане на данни от MDB и CSV
-Поддържа както .mdb файлове (чрез конвертиране), така и директна работа с .csv файлове
+Kasi Extractor - GUI Приложение за извличане на данни от MDB
 """
 
 from tkinter import ttk, filedialog, messagebox
+# from tkcalendar import DateEntry
 from datetime import datetime, date
 import tkinter as tk
+import subprocess
 import json
 import csv
 import sys
@@ -13,13 +14,8 @@ import io
 import os
 
 try:
-    import pandas as pd
-    PANDAS_AVAILABLE = True
-except ImportError:
-    PANDAS_AVAILABLE = False
-
-try:
     import pandas_access as mdb
+    import pandas as pd
     PANDAS_ACCESS_AVAILABLE = True
 except ImportError:
     PANDAS_ACCESS_AVAILABLE = False
@@ -27,15 +23,14 @@ except ImportError:
 class KasiExtractor:
     def __init__(self, root):
         self.root = root
-        self.root.title("SMS Notification Clients v2.0 - CSV Support")
-        self.root.geometry("900x800")  # Увеличена височина за новата секция
+        self.root.title("SMS Notification Clients v1.0")
+        self.root.geometry("900x700")
         self.root.resizable(True, True)
 
         self.filtered_data_lines = []  # За запазване на филтрираните данни
-        self.current_file_type = None  # 'mdb' или 'csv'
         
         # Променливи
-        self.file_path = tk.StringVar()
+        self.mdb_file_path = tk.StringVar()
 
         # Променливи за дати
         self.start_date = tk.StringVar()
@@ -135,55 +130,23 @@ class KasiExtractor:
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         
-        # 1. СЕКЦИЯ: ИЗБОР НА ФАЙЛ (MDB или CSV)
-        file_frame = ttk.LabelFrame(main_frame, text="📁 Избор на MDB или CSV файл", padding="10")
+        # 1. СЕКЦИЯ: ИЗБОР НА MDB ФАЙЛ
+        file_frame = ttk.LabelFrame(main_frame, text="📁 Избор на MDB файл", padding="10")
         file_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         file_frame.columnconfigure(1, weight=1)
         
         # Бутон за избор на файл
-        ttk.Button(file_frame, text="Избери файл", 
-                  command=self.select_file).grid(row=0, column=0, padx=(0, 10))
+        ttk.Button(file_frame, text="Избери MDB файл", 
+                  command=self.select_mdb_file).grid(row=0, column=0, padx=(0, 10))
         
         # Поле за показване на избрания файл
-        self.file_entry = ttk.Entry(file_frame, textvariable=self.file_path, 
+        self.file_entry = ttk.Entry(file_frame, textvariable=self.mdb_file_path, 
                                    state="readonly", width=50)
         self.file_entry.grid(row=0, column=1, sticky=(tk.W, tk.E))
         
-        # Информация за поддържани файлове
-        info_label = ttk.Label(file_frame, text="Поддържани файлове: .mdb (Access Database), .csv (Comma Separated Values)", 
-                              foreground="gray", font=("TkDefaultFont", 8))
-        info_label.grid(row=1, column=0, columnspan=2, pady=(5, 0), sticky=tk.W)
-
-        # 2. СЕКЦИЯ: КОНВЕРТИРАНЕ НА MDB В CSV (показва се само за .mdb файлове)
-        self.convert_frame = ttk.LabelFrame(main_frame, text="🔄 Конвертиране на MDB в CSV", padding="10")
-        self.convert_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
-        self.convert_frame.columnconfigure(0, weight=1)
-        
-        # Скриваме първоначално
-        self.convert_frame.grid_remove()
-        
-        # Информация за конвертирането
-        convert_info_label = ttk.Label(self.convert_frame, 
-                                      text="За работа с MDB файлове препоръчваме първо да ги конвертирате в CSV формат.\nТова ще осигури по-стабилна работа и по-бърза обработка на данните.",
-                                      foreground="blue", font=("TkDefaultFont", 9))
-        convert_info_label.grid(row=0, column=0, columnspan=3, pady=(0, 10), sticky=tk.W)
-        
-        # Бутон за конвертиране
-        self.convert_button = ttk.Button(self.convert_frame, text="🔄 Конвертирай към CSV", 
-                                        command=self.convert_mdb_to_csv, state="disabled")
-        self.convert_button.grid(row=1, column=0, padx=(0, 10))
-        
-        # Progress bar за конвертиране
-        self.convert_progress = ttk.Progressbar(self.convert_frame, mode='indeterminate')
-        self.convert_progress.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=(0, 10))
-        
-        # Статус на конвертирането
-        self.convert_status_label = ttk.Label(self.convert_frame, text="", foreground="gray")
-        self.convert_status_label.grid(row=2, column=0, columnspan=3, pady=(10, 0), sticky=tk.W)
-
-        # 3. СЕКЦИЯ: СТАТУС НА ФАЙЛА
+        # 2. СЕКЦИЯ: СТАТУС НА ФАЙЛА
         status_frame = ttk.LabelFrame(main_frame, text="📊 Информация за файла", padding="10")
-        status_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        status_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         status_frame.columnconfigure(0, weight=1)
         
         # Статус лейбъл
@@ -191,19 +154,24 @@ class KasiExtractor:
                                      foreground="gray")
         self.status_label.grid(row=0, column=0, sticky=tk.W)
         
-        # 4. СЕКЦИЯ: ТЕСТ НА ВРЪЗКАТА/ФАЙЛА
-        test_frame = ttk.LabelFrame(main_frame, text="🔧 Преглед на данните", padding="10")
-        test_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        # 3. СЕКЦИЯ: ТЕСТ НА ВРЪЗКАТА (временно за тестване)
+        test_frame = ttk.LabelFrame(main_frame, text="🔧 Тестване", padding="10")
+        test_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         
-        # Бутон за тест
-        self.test_button = ttk.Button(test_frame, text="📋 Прегледай файла", 
-                                     command=self.test_file_connection, 
+        # Бутон за тест на таблици
+        self.test_button = ttk.Button(test_frame, text="Тествай връзка с базата", 
+                                     command=self.test_database_connection, 
                                      state="disabled")
         self.test_button.grid(row=0, column=0, padx=(0, 10))
+        
+        # 4. СЕКЦИЯ: СТАТУС БАР (долу)
+        status_bar_frame = ttk.Frame(main_frame)
+        status_bar_frame.grid(row=10, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(20, 0))
+        status_bar_frame.columnconfigure(0, weight=1)
 
         # 5. СЕКЦИЯ: ИЗБОР НА ДАТИ ЗА ФИЛТРИРАНЕ
         date_frame = ttk.LabelFrame(main_frame, text="📅 Филтриране по дати", padding="10")
-        date_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        date_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         date_frame.columnconfigure(1, weight=1)
         date_frame.columnconfigure(3, weight=1)
         
@@ -237,7 +205,7 @@ class KasiExtractor:
 
         # 6. СЕКЦИЯ: ИЗВЛИЧАНЕ НА КОНКРЕТНИ КОЛОНИ
         extract_frame = ttk.LabelFrame(main_frame, text="📋 Извличане на данни", padding="10")
-        extract_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        extract_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         extract_frame.columnconfigure(0, weight=1)
         
         # Информация за колоните
@@ -262,17 +230,17 @@ class KasiExtractor:
 
         # 7. СЕКЦИЯ: ПЪЛЕН ЕКСПОРТ НА ТАБЛИЦА
         export_frame = ttk.LabelFrame(main_frame, text="📤 Пълен експорт", padding="10")
-        export_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        export_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         export_frame.columnconfigure(0, weight=1)
         
         # Информация
         export_info_label = ttk.Label(export_frame, 
-                                     text="Експортиране на цялата таблица (всички колони, всички редове)",
+                                     text="Експортиране на цялата таблица Kasi_all (всички колони, всички редове)",
                                      foreground="gray", font=("TkDefaultFont", 8))
         export_info_label.grid(row=0, column=0, sticky=tk.W, pady=(0, 10))
         
         # Бутон за пълен експорт
-        self.full_export_button = ttk.Button(export_frame, text="📁 Експортирай цял файл", 
+        self.full_export_button = ttk.Button(export_frame, text="📁 Експортирай цяла таблица", 
                                             command=self.export_full_table, state="disabled")
         self.full_export_button.grid(row=1, column=0, sticky=tk.W)
         
@@ -280,11 +248,6 @@ class KasiExtractor:
         self.extract_result_label = ttk.Label(extract_frame, text="", foreground="gray")
         self.extract_result_label.grid(row=2, column=0, columnspan=3, pady=(10, 0), sticky=tk.W)
         
-        # 8. СТАТУС БАР (долу)
-        status_bar_frame = ttk.Frame(main_frame)
-        status_bar_frame.grid(row=10, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(20, 0))
-        status_bar_frame.columnconfigure(0, weight=1)
-
         # Статус бар
         self.status_bar = ttk.Label(status_bar_frame, text="Готов за работа", 
                                    relief=tk.SUNKEN, anchor=tk.W, padding="5")
@@ -314,207 +277,53 @@ class KasiExtractor:
             print(f"Предупреждение: Не можах да задам началните дати: {e}")
             self.update_status_bar("Готов за работа")
 
-    def select_file(self):
-        """Отваря диалог за избор на MDB или CSV файл"""
+    def select_mdb_file(self):
+        """Отваря диалог за избор на MDB файл"""
         file_path = filedialog.askopenfilename(
-            title="Избери MDB или CSV файл",
+            title="Избери MDB файл",
             filetypes=[
                 ("MDB файлове", "*.mdb"),
-                ("CSV файлове", "*.csv"),
                 ("Всички файлове", "*.*")
             ]
         )
         
         if file_path:
-            self.file_path.set(file_path)
-            self.detect_file_type(file_path)
+            self.mdb_file_path.set(file_path)
             self.update_file_status(file_path)
             self.update_status_bar(f"Избран файл: {os.path.basename(file_path)}")
-
-    def detect_file_type(self, file_path):
-        """Разпознава типа на файла и адаптира интерфейса"""
-        file_extension = os.path.splitext(file_path)[1].lower()
-        
-        if file_extension == '.mdb':
-            self.current_file_type = 'mdb'
-            # Показваме секцията за конвертиране
-            self.convert_frame.grid()
-            self.convert_button.config(state="normal")
-            # Променяме текста на бутона за тест
-            self.test_button.config(text="🔧 Тествай MDB файла")
-        elif file_extension == '.csv':
-            self.current_file_type = 'csv'
-            # Скриваме секцията за конвертиране
-            self.convert_frame.grid_remove()
-            # Променяме текста на бутона за тест
-            self.test_button.config(text="📋 Прегледай CSV файла")
-        else:
-            self.current_file_type = 'unknown'
-            self.convert_frame.grid_remove()
-            self.test_button.config(text="❓ Прегледай файла")
     
     def update_file_status(self, file_path):
         """Обновява статуса на избрания файл"""
         if os.path.exists(file_path):
             file_size = os.path.getsize(file_path)
             size_mb = file_size / (1024 * 1024)
-            file_type = self.current_file_type.upper() if self.current_file_type else "НЕИЗВЕСТЕН"
             
-            status_text = f"✅ Файл: {os.path.basename(file_path)} ({file_type}, {size_mb:.1f} MB)"
+            status_text = f"✅ Файл: {os.path.basename(file_path)} ({size_mb:.1f} MB)"
             self.status_label.config(text=status_text, foreground="green")
             
             # Активираме бутоните
             self.test_button.config(state="normal")
-            if self.current_file_type == 'csv':
-                # За CSV файлове веднага активираме филтрирането
-                self.filter_button.config(state="normal")
-                self.full_export_button.config(state="normal")
-            elif self.current_file_type == 'mdb':
-                # За MDB файлове активираме само ако има pandas_access
-                if PANDAS_ACCESS_AVAILABLE:
-                    self.filter_button.config(state="normal")
-                    self.full_export_button.config(state="normal")
-                else:
-                    self.update_status_bar("⚠️ За MDB файлове е необходим pandas_access")
+            self.filter_button.config(state="normal")
+            self.full_export_button.config(state="normal")
         else:
             self.status_label.config(text="❌ Файлът не съществува", foreground="red")
             self.test_button.config(state="disabled")
-
-    def convert_mdb_to_csv(self):
-        """Конвертира MDB файл в CSV формат"""
-        if not self.file_path.get() or self.current_file_type != 'mdb':
+    
+    def test_database_connection(self):
+        """Тества връзката с базата данни и показва таблиците"""
+        if not self.mdb_file_path.get():
             messagebox.showerror("Грешка", "Моля изберете MDB файл първо!")
             return
         
         if not PANDAS_ACCESS_AVAILABLE:
-            messagebox.showerror("Грешка", "pandas_access не е инсталиран! За конвертиране на MDB файлове е необходим pandas_access.")
+            messagebox.showerror("Грешка", "pandas_access не е инсталиран! Моля инсталирайте го с: pip install pandas_access")
             return
         
-        # Избор на файл за запис
-        csv_file_path = filedialog.asksaveasfilename(
-            title="Запиши като CSV",
-            defaultextension=".csv",
-            filetypes=[("CSV файлове", "*.csv"), ("Всички файлове", "*.*")],
-            initialfile=os.path.splitext(os.path.basename(self.file_path.get()))[0] + ".csv"
-        )
-        
-        if not csv_file_path:
-            return
-        
-        try:
-            self.update_status_bar("Конвертиране на MDB към CSV...")
-            self.convert_progress.start()
-            self.convert_button.config(state="disabled")
-            self.root.update_idletasks()
-            
-            # Четене на таблицата Kasi_all с pandas_access
-            df = mdb.read_table(self.file_path.get(), "Kasi_all")
-            
-            # Поправяме кодировката на всички string колони
-            for column in df.columns:
-                if df[column].dtype == 'object':  # string колони
-                    df[column] = df[column].astype(str).apply(
-                        lambda x: self.fix_encoding_utf8_to_windows1251(x) if x != 'nan' else ''
-                    )
-            
-            # Записваме директно с pandas
-            df.to_csv(csv_file_path, index=False, encoding='utf-8')
-            
-            # Статистики
-            total_rows = len(df)
-            total_columns = len(df.columns)
-            file_size = os.path.getsize(csv_file_path)
-            
-            self.convert_progress.stop()
-            self.convert_button.config(state="normal")
-            
-            self.convert_status_label.config(
-                text=f"✅ Конвертирането е успешно! Създаден файл: {os.path.basename(csv_file_path)} ({total_rows} реда, {total_columns} колони)",
-                foreground="green"
-            )
-            
-            self.update_status_bar(f"Конвертиране завършено: {os.path.basename(csv_file_path)}")
-            
-            # Питаме потребителя дали иска да работи с новия CSV файл
-            if messagebox.askyesno("Конвертиране завършено", 
-                                 f"Конвертирането е завършено успешно!\n\n"
-                                 f"📁 CSV файл: {os.path.basename(csv_file_path)}\n"
-                                 f"📊 Редове: {total_rows:,}\n"
-                                 f"📋 Колони: {total_columns}\n"
-                                 f"💾 Размер: {file_size / 1024 / 1024:.1f} MB\n\n"
-                                 f"Искате ли да започнете работа с новия CSV файл?"):
-                # Зареждаме новия CSV файл
-                self.file_path.set(csv_file_path)
-                self.detect_file_type(csv_file_path)
-                self.update_file_status(csv_file_path)
-                self.update_status_bar(f"Зареден CSV файл: {os.path.basename(csv_file_path)}")
-            
-        except Exception as e:
-            self.convert_progress.stop()
-            self.convert_button.config(state="normal")
-            messagebox.showerror("Грешка", f"Грешка при конвертиране:\n{str(e)}")
-            self.update_status_bar(f"Грешка при конвертиране: {str(e)}")
-    
-    def test_file_connection(self):
-        """Тества файла и показва информация за него"""
-        if not self.file_path.get():
-            messagebox.showerror("Грешка", "Моля изберете файл първо!")
-            return
-        
-        self.update_status_bar("Прегледане на файла...")
-        
-        if self.current_file_type == 'csv':
-            self._test_csv_file()
-        elif self.current_file_type == 'mdb':
-            self._test_mdb_file()
-        else:
-            messagebox.showerror("Грешка", "Неподдържан файлов формат!")
-
-    def _test_csv_file(self):
-        """Тества CSV файл"""
-        try:
-            if not PANDAS_AVAILABLE:
-                messagebox.showerror("Грешка", "pandas не е инсталиран! Необходим е за работа с CSV файлове.")
-                return
-            
-            # Четем първите няколко реда за преглед
-            df = pd.read_csv(self.file_path.get(), nrows=5, encoding='utf-8')
-            
-            # Информация за файла
-            total_rows = sum(1 for line in open(self.file_path.get(), 'r', encoding='utf-8')) - 1  # -1 за header
-            total_columns = len(df.columns)
-            
-            # Проверяваме дали има колона End_Data
-            has_end_data = 'End_Data' in df.columns
-            
-            # Проверяваме дали има нужните колони за извличане
-            required_columns = ['Number', 'End_Data', 'Model', 'Number_EKA', 'Ime_Obekt', 
-                              'Adres_Obekt', 'Dan_Number', 'Phone', 'Ime_Firma', 'bulst']
-            found_columns = [col for col in required_columns if col in df.columns]
-            
-            messagebox.showinfo("Информация за CSV файла", 
-                              f"✅ CSV файлът е четлив!\n\n"
-                              f"📊 Общо редове: {total_rows:,}\n"
-                              f"📋 Общо колони: {total_columns}\n"
-                              f"📅 Колона 'End_Data': {'✅ Намерена' if has_end_data else '❌ Не е намерена'}\n"
-                              f"🎯 Намерени нужни колони: {len(found_columns)}/{len(required_columns)}\n\n"
-                              f"Първите колони:\n" + ", ".join(df.columns[:10]))
-            
-            self.update_status_bar("✅ CSV файлът е готов за работа")
-            
-        except Exception as e:
-            messagebox.showerror("Грешка", f"Грешка при четене на CSV файла:\n{str(e)}")
-            self.update_status_bar(f"Грешка: {str(e)}")
-
-    def _test_mdb_file(self):
-        """Тества MDB файл (запазена оригинална логика)"""
-        if not PANDAS_ACCESS_AVAILABLE:
-            messagebox.showerror("Грешка", "pandas_access не е инсталиран! Моля инсталирайте го за работа с MDB файлове.")
-            return
+        self.update_status_bar("Тестване на връзката с базата...")
         
         try:
             # Използваме pandas_access
-            tables = list(mdb.list_tables(self.file_path.get()))
+            tables = list(mdb.list_tables(self.mdb_file_path.get()))
             self._show_tables_result(tables)
             
         except Exception as e:
@@ -537,100 +346,13 @@ class KasiExtractor:
     
     def filter_data(self):
         """Филтрира данните по избраните дати"""
-        if not self.file_path.get():
-            messagebox.showerror("Грешка", "Моля изберете файл първо!")
+        if not self.mdb_file_path.get():
+            messagebox.showerror("Грешка", "Моля изберете MDB файл първо!")
             return
         
-        # Различна логика за различни типове файлове
-        if self.current_file_type == 'csv':
-            return self._filter_csv_data()
-        elif self.current_file_type == 'mdb':
-            return self._filter_mdb_data()
-        else:
-            messagebox.showerror("Грешка", "Неподдържан файлов формат!")
-            return False
-
-    def _filter_csv_data(self):
-        """Филтрира CSV данни"""
-        if not PANDAS_AVAILABLE:
-            messagebox.showerror("Грешка", "pandas не е инсталиран!")
-            return False
-        
-        try:
-            start_date_str = self.start_date_entry.get().strip()
-            end_date_str = self.end_date_entry.get().strip()
-            
-            if not start_date_str or not end_date_str:
-                messagebox.showerror("Грешка", "Моля въведете начална и крайна дата!")
-                return False
-            
-            # Проверка на последователността на датите
-            if not self.validate_date_range():
-                messagebox.showerror("Грешка", "Крайната дата не може да бъде преди началната дата!")
-                return False
-                
-        except Exception as e:
-            messagebox.showerror("Грешка", f"Проблем с четенето на датите:\n{str(e)}")
-            return False
-
-        self.update_status_bar(f"Филтриране от {start_date_str} до {end_date_str}...")
-        self.root.update_idletasks()
-        
-        try:
-            # Четене на CSV файла с pandas
-            df = pd.read_csv(self.file_path.get(), encoding='utf-8')
-            
-            # Парсиране на датите за филтриране
-            start_date = datetime.strptime(start_date_str, '%d.%m.%Y')
-            end_date = datetime.strptime(end_date_str, '%d.%m.%Y')
-            
-            # Филтриране по End_Data колоната
-            if 'End_Data' not in df.columns:
-                messagebox.showerror("Грешка", "Колона 'End_Data' не е намерена в CSV файла!")
-                return False
-            
-            # Конвертиране на End_Data към datetime
-            try:
-                df['End_Data_parsed'] = pd.to_datetime(df['End_Data'], format='%m/%d/%y %H:%M:%S', errors='coerce')
-            except:
-                try:
-                    df['End_Data_parsed'] = pd.to_datetime(df['End_Data'], format='%m/%d/%Y %H:%M:%S', errors='coerce')
-                except:
-                    df['End_Data_parsed'] = pd.to_datetime(df['End_Data'], errors='coerce')
-            
-            # Филтриране по дати
-            mask = (df['End_Data_parsed'].dt.date >= start_date.date()) & \
-                (df['End_Data_parsed'].dt.date <= end_date.date())
-            filtered_df = df[mask]
-            
-            # Запазване на филтрираните данни като CSV lines
-            self._save_filtered_data_as_lines(filtered_df)
-            
-            total_rows = len(filtered_df)
-            original_rows = len(df)
-            percent = (total_rows/original_rows*100) if original_rows > 0 else 0
-            
-            result_text = f"✅ Филтрирани {total_rows} от общо {original_rows} реда"
-            detailed_result = f"{result_text} ({percent:.1f}%)"
-            self.filter_result_label.config(text=detailed_result, foreground="green")
-            self.update_status_bar(f"Филтриране завършено: {total_rows} от {original_rows} реда ({percent:.1f}%)")
-            
-            messagebox.showinfo("Резултат", f"Филтрирането е завършено!\n\nПериод: {start_date_str} - {end_date_str}\nОбщо редове: {original_rows}\nФилтрирани редове: {total_rows}")
-            
-            # Активираме бутона за извличане
-            self.extract_button.config(state="normal")
-            return True
-            
-        except Exception as e:
-            messagebox.showerror("Грешка", f"Неочаквана грешка:\n{str(e)}")
-            self.update_status_bar(f"Грешка: {str(e)}")
-            return False
-
-    def _filter_mdb_data(self):
-        """Филтрира MDB данни (запазена оригинална логика)"""
         if not PANDAS_ACCESS_AVAILABLE:
             messagebox.showerror("Грешка", "pandas_access не е инсталиран!")
-            return False
+            return
         
         try:
             start_date_str = self.start_date_entry.get().strip()
@@ -638,23 +360,23 @@ class KasiExtractor:
             
             if not start_date_str or not end_date_str:
                 messagebox.showerror("Грешка", "Моля въведете начална и крайна дата!")
-                return False
+                return
             
             # Проверка на последователността на датите
             if not self.validate_date_range():
                 messagebox.showerror("Грешка", "Крайната дата не може да бъде преди началната дата!")
-                return False
+                return
                 
         except Exception as e:
             messagebox.showerror("Грешка", f"Проблем с четенето на датите:\n{str(e)}")
-            return False
+            return
 
         self.update_status_bar(f"Филтриране от {start_date_str} до {end_date_str}...")
         self.root.update_idletasks()
         
         try:
             # Четене на цялата таблица с pandas_access
-            df = mdb.read_table(self.file_path.get(), "Kasi_all")
+            df = mdb.read_table(self.mdb_file_path.get(), "Kasi_all")
             
             # Парсиране на датите за филтриране
             start_date = datetime.strptime(start_date_str, '%d.%m.%Y')
@@ -666,6 +388,7 @@ class KasiExtractor:
                 return False
             
             # Конвертиране на End_Data към datetime
+            # Опитваме различни формати дати
             try:
                 df['End_Data_parsed'] = pd.to_datetime(df['End_Data'], format='%m/%d/%y %H:%M:%S', errors='coerce')
             except:
@@ -680,7 +403,25 @@ class KasiExtractor:
             filtered_df = df[mask]
             
             # Запазване на филтрираните данни като CSV lines
-            self._save_filtered_data_as_lines(filtered_df)
+            self.filtered_data_lines = []
+            
+            # Header
+            columns = list(filtered_df.columns)
+            if 'End_Data_parsed' in columns:
+                columns.remove('End_Data_parsed')  # Премахваме помощната колона
+            self.filtered_data_lines.append(','.join(f'"{col}"' for col in columns))
+            
+            # Данни
+            for _, row in filtered_df.iterrows():
+                csv_row = []
+                for col in columns:
+                    value = row[col]
+                    if pd.isna(value):
+                        csv_row.append('""')
+                    else:
+                        str_value = str(value).replace('"', '""')
+                        csv_row.append(f'"{str_value}"')
+                self.filtered_data_lines.append(','.join(csv_row))
             
             total_rows = len(filtered_df)
             original_rows = len(df)
@@ -702,31 +443,8 @@ class KasiExtractor:
             self.update_status_bar(f"Грешка: {str(e)}")
             return False
 
-    def _save_filtered_data_as_lines(self, filtered_df):
-        """Запазва филтрираните данни като CSV lines"""
-        # Запазване на филтрираните данни като CSV lines
-        self.filtered_data_lines = []
-        
-        # Header
-        columns = list(filtered_df.columns)
-        if 'End_Data_parsed' in columns:
-            columns.remove('End_Data_parsed')  # Премахваме помощната колона
-        self.filtered_data_lines.append(','.join(f'"{col}"' for col in columns))
-        
-        # Данни
-        for _, row in filtered_df.iterrows():
-            csv_row = []
-            for col in columns:
-                value = row[col]
-                if pd.isna(value):
-                    csv_row.append('""')
-                else:
-                    str_value = str(value).replace('"', '""')
-                    csv_row.append(f'"{str_value}"')
-            self.filtered_data_lines.append(','.join(csv_row))
-
     def extract_specific_columns(self):
-        """Извлича конкретните 10 колони от филтрираните данни (запазена оригинална логика)"""
+        """Извлича конкретните 10 колони от филтрираните данни"""
         if not hasattr(self, 'filtered_data_lines') or len(self.filtered_data_lines) < 2:
             messagebox.showerror("Грешка", "Няма филтрирани данни! Първо направете филтрация.")
             return False
@@ -781,13 +499,12 @@ class KasiExtractor:
                     for col_name in new_header:
                         if column_indices[col_name] < len(fields):
                             field_value = fields[column_indices[col_name]]
-                            
-                            # Премахване на .0 от числата ако са цели числа
-                            if field_value.endswith('.0') and field_value.replace('.0', '').replace('-', '').isdigit():
-                                field_value = field_value[:-2]
-                            
-                            # Кодировката вече е поправена в предишната стъпка
-                            new_row.append(f'"{field_value}"')
+                            # Поправяме кодировката само на Linux
+                            if sys.platform != "win32":
+                                fixed_value = self.fix_encoding_utf8_to_windows1251(field_value)
+                            else:
+                                fixed_value = field_value
+                            new_row.append(f'"{fixed_value}"')
                         else:
                             new_row.append('""')  # Празно поле ако няма данни
                     
@@ -829,78 +546,11 @@ class KasiExtractor:
             return False
     
     def export_full_table(self):
-        """Експортира целия файл в CSV формат"""
-        if not self.file_path.get():
-            messagebox.showerror("Грешка", "Моля изберете файл първо!")
+        """Експортира цялата таблица Kasi_all в CSV формат"""
+        if not self.mdb_file_path.get():
+            messagebox.showerror("Грешка", "Моля изберете MDB файл първо!")
             return
         
-        # Различна логика за различни типове файлове
-        if self.current_file_type == 'csv':
-            self._export_full_csv()
-        elif self.current_file_type == 'mdb':
-            self._export_full_mdb()
-        else:
-            messagebox.showerror("Грешка", "Неподдържан файлов формат!")
-
-    def _export_full_csv(self):
-        """Експортира целия CSV файл (копиране или конвертиране)"""
-        # Избор на файл за запис
-        file_path = filedialog.asksaveasfilename(
-            title="Експортирай цял CSV файл",
-            defaultextension=".csv",
-            filetypes=[("CSV файлове", "*.csv"), ("Всички файлове", "*.*")],
-            initialfile=os.path.splitext(os.path.basename(self.file_path.get()))[0] + "_export.csv"
-        )
-        
-        if not file_path:
-            return
-        
-        try:
-            self.update_status_bar("Експортиране на целия CSV файл...")
-            
-            if not PANDAS_AVAILABLE:
-                # Просто копиране ако няма pandas
-                import shutil
-                shutil.copy2(self.file_path.get(), file_path)
-            else:
-                # Четене и повторно записване с поправяне на кодировката
-                df = pd.read_csv(self.file_path.get(), encoding='utf-8')
-                
-                # Поправяме кодировката на всички string колони
-                for column in df.columns:
-                    if df[column].dtype == 'object':  # string колони
-                        df[column] = df[column].astype(str).apply(
-                            lambda x: self.fix_encoding_utf8_to_windows1251(x) if x != 'nan' else ''
-                        )
-                
-                # Записваме директно с pandas
-                df.to_csv(file_path, index=False, encoding='utf-8')
-            
-            # Статистики
-            file_size = os.path.getsize(file_path)
-            
-            if PANDAS_AVAILABLE:
-                total_rows = len(df)
-                total_columns = len(df.columns)
-                stats_text = f"📊 Редове: {total_rows:,}\n📋 Колони: {total_columns}\n"
-            else:
-                stats_text = ""
-            
-            self.update_status_bar(f"Пълен експорт завършен: {os.path.basename(file_path)}")
-            
-            messagebox.showinfo("Успех", 
-                            f"Пълният експорт е завършен успешно!\n\n"
-                            f"📁 Файл: {os.path.basename(file_path)}\n"
-                            f"{stats_text}"
-                            f"💾 Размер: {file_size / 1024 / 1024:.1f} MB\n"
-                            f"🔗 Път: {file_path}")
-            
-        except Exception as e:
-            messagebox.showerror("Грешка", f"Грешка при пълен експорт:\n{str(e)}")
-            self.update_status_bar(f"Грешка: {str(e)}")
-
-    def _export_full_mdb(self):
-        """Експортира цялата MDB таблица в CSV формат (запазена оригинална логика)"""
         if not PANDAS_ACCESS_AVAILABLE:
             messagebox.showerror("Грешка", "pandas_access не е инсталиран!")
             return
@@ -920,7 +570,7 @@ class KasiExtractor:
             self.update_status_bar("Експортиране на цялата таблица...")
             
             # Четене на цялата таблица с pandas_access
-            df = mdb.read_table(self.file_path.get(), "Kasi_all")
+            df = mdb.read_table(self.mdb_file_path.get(), "Kasi_all")
             
             # Поправяме кодировката на всички string колони
             for column in df.columns:
@@ -961,7 +611,7 @@ class KasiExtractor:
         self.root.quit()
 
     def save_csv(self):
-        """Запис в CSV формат (запазена оригинална логика)"""
+        """Запис в CSV формат"""
         if not hasattr(self, 'extracted_data_lines') or len(self.extracted_data_lines) < 2:
             messagebox.showerror("Грешка", "Няма извлечени данни за запис!")
             return
@@ -1002,7 +652,7 @@ class KasiExtractor:
             self.update_status_bar("Грешка при записване на CSV")
     
     def save_json(self):
-        """Запис в JSON формат като масив от обекти (запазена оригинална логика)"""
+        """Запис в JSON формат като масив от обекти"""
         if not hasattr(self, 'extracted_data_lines') or len(self.extracted_data_lines) < 2:
             messagebox.showerror("Грешка", "Няма извлечени данни за запис!")
             return
@@ -1087,6 +737,13 @@ class KasiExtractor:
 
 def main():
     """Главна функция"""
+    # Проверяваме за mdb-tools при стартиране
+    try:
+        subprocess.run(["mdb-tables", "--help"], capture_output=True)
+    except FileNotFoundError:
+        print("⚠️ ВНИМАНИЕ: mdb-tools не е намерен!")
+        print("Моля инсталирайте mdb-tools за да работи приложението.")
+    
     # Стартираме GUI
     root = tk.Tk()
     app = KasiExtractor(root)

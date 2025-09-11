@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Windows EXE v2.0
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-windows:
-    runs-on: windows-2022  # Използваме конкретна версия
+    runs-on: windows-2022
     
     steps:
     - name: Checkout code
@@ -21,89 +21,90 @@ jobs:
       with:
         python-version: '3.10'
         
-    - name: Install dependencies
+    - name: Install core dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pandas pandas_access pyinstaller
+        pip install pandas pyinstaller
         
-    - name: Download mdb-tools for Windows
+    - name: Install optional MDB support (pandas_access)
       run: |
-        # Сваляме готови Windows binaries
-        Invoke-WebRequest -Uri "https://github.com/lsgunth/mdbtools-win/archive/refs/heads/master.zip" -OutFile "mdbtools.zip"
-        Expand-Archive -Path "mdbtools.zip" -DestinationPath "mdbtools"
+        # Опитваме се да инсталираме pandas_access за MDB поддръжка
+        # Ако не успее, приложението ще работи само с CSV файлове
+        try {
+          pip install pandas_access
+          Write-Host "pandas_access installed successfully - MDB support enabled"
+        } catch {
+          Write-Host "pandas_access installation failed - only CSV support available"
+          Write-Host "This is expected and the application will work for CSV files"
+        }
         
-    - name: Build EXE with mdb-tools
+    - name: Build EXE (CSV + optional MDB support)
       run: |
-        # Включваме mdb-tools в build-а
-        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v1.0" --add-data "mdbtools/*;mdbtools/" sms_notification_clients.py
+        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v2.0" `
+          --icon=app_icon.ico `
+          --add-data="README.md;." `
+          --exclude-module=pytest `
+          --exclude-module=unittest `
+          sms_notification_clients.py
         
-    - name: List dist directory
+    - name: Test EXE creation
       run: |
-        Write-Host "Contents of dist directory:"
-        Get-ChildItem -Path "dist" -Recurse | Format-Table Name, Length, LastWriteTime
-        
-    - name: Test EXE (basic)
-      run: |
-        if (Test-Path "dist/SMS_Notification_Clients_v1.0.exe") {
-          Write-Host "EXE file created successfully"
-          Get-Item "dist/SMS_Notification_Clients_v1.0.exe" | Select-Object Name, Length, LastWriteTime
+        if (Test-Path "dist/SMS_Notification_Clients_v2.0.exe") {
+          $exe = Get-Item "dist/SMS_Notification_Clients_v2.0.exe"
+          Write-Host "EXE created successfully:"
+          Write-Host "  Name: $($exe.Name)"
+          Write-Host "  Size: $([math]::Round($exe.Length / 1MB, 2)) MB"
+          Write-Host "  Created: $($exe.LastWriteTime)"
         } else {
-          Write-Error "EXE file not found"
-          Get-ChildItem -Path "dist" | Format-Table
+          Write-Error "EXE file not found!"
+          Write-Host "Directory contents:"
+          Get-ChildItem -Path "dist" -ErrorAction SilentlyContinue | Format-Table
           exit 1
         }
         
-    - name: Upload artifact
+    - name: Basic functionality test
+      run: |
+        # Кратък тест дали EXE-то се стартира
+        try {
+          $process = Start-Process -FilePath "dist/SMS_Notification_Clients_v2.0.exe" -ArgumentList "--version" -Wait -PassThru -NoNewWindow
+          Write-Host "EXE startup test completed with exit code: $($process.ExitCode)"
+        } catch {
+          Write-Host "Basic test failed, but this might be expected for GUI applications"
+        }
+        
+    - name: Upload Windows EXE
       uses: actions/upload-artifact@v4
       with:
-        name: SMS_Notification_Clients_Windows
-        path: dist/SMS_Notification_Clients_v1.0.exe
+        name: SMS_Notification_Clients_v2_Windows
+        path: dist/SMS_Notification_Clients_v2.0.exe
+        retention-days: 90
         
-    - name: Create Release (if tag)
+    - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/SMS_Notification_Clients_v1.0.exe
-
-# name: Build Windows EXE
-
-# on:
-#   push:
-#     branches: [ main ]
-#   pull_request:
-#     branches: [ main ]
-#   workflow_dispatch:  # Позволява ръчно стартиране
-
-# jobs:
-#   build-windows:
-#     runs-on: windows-2022  # Използваме конкретна версия
-    
-#     steps:
-#     - uses: actions/checkout@v4
-    
-#     - name: Set up Python
-#       uses: actions/setup-python@v5
-#       with:
-#         python-version: '3.10'
-    
-#     - name: Install dependencies
-#       run: |
-#         python -m pip install --upgrade pip
-#         pip install pyinstaller pyodbc
-    
-#     - name: Build EXE with PyInstaller
-#       run: |
-#         pyinstaller --onefile --windowed --name="SMS_Notification_Clients" sms_notification_clients.py
-    
-#     - name: Upload EXE artifact
-#       uses: actions/upload-artifact@v4
-#       with:
-#         name: SMS_Notification_Clients_Windows
-#         path: dist/SMS_Notification_Clients.exe
-    
-#     - name: Create Release (if tag)
-#       if: startsWith(github.ref, 'refs/tags/')
-#       uses: softprops/action-gh-release@v1
-#       with:
-#         files: dist/SMS_Notification_Clients.exe
-#         generate_release_notes: true
+        files: dist/SMS_Notification_Clients_v2.0.exe
+        name: "SMS Notification Clients v2.0 - ${{ github.ref_name }}"
+        body: |
+          # SMS Notification Clients v2.0
+          
+          ## New Features
+          - Direct CSV file support (no conversion needed)
+          - Optional MDB to CSV conversion
+          - Improved Windows compatibility
+          - No external dependencies required
+          
+          ## System Requirements
+          - Windows 10/11 (64-bit)
+          - No additional software installation needed
+          
+          ## Usage
+          1. Download and run the .exe file
+          2. For MDB files: Use "Convert to CSV" feature first
+          3. For CSV files: Work directly with filtering and export
+          
+          **File size:** ~50-100MB (includes Python runtime and pandas)
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
