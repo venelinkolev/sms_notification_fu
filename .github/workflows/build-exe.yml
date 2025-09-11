@@ -21,90 +21,67 @@ jobs:
       with:
         python-version: '3.10'
         
-    - name: Install core dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pandas pyinstaller
         
-    - name: Install optional MDB support (pandas_access)
+    - name: Try install pandas_access (optional)
       run: |
-        # Опитваме се да инсталираме pandas_access за MDB поддръжка
-        # Ако не успее, приложението ще работи само с CSV файлове
-        try {
-          pip install pandas_access
-          Write-Host "pandas_access installed successfully - MDB support enabled"
-        } catch {
-          Write-Host "pandas_access installation failed - only CSV support available"
-          Write-Host "This is expected and the application will work for CSV files"
-        }
+        pip install pandas_access
+      continue-on-error: true
         
-    - name: Build EXE (CSV + optional MDB support)
+    - name: List Python files
       run: |
-        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v2.0" `
-          --icon=app_icon.ico `
-          --add-data="README.md;." `
-          --exclude-module=pytest `
-          --exclude-module=unittest `
-          sms_notification_clients.py
+        Write-Host "Available Python files:"
+        Get-ChildItem -Filter "*.py" | Format-Table Name, Length
         
-    - name: Test EXE creation
+    - name: Build EXE
+      run: |
+        Write-Host "Building EXE from: sms_notification_clients.py"
+        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v2.0" sms_notification_clients.py
+        
+    - name: Verify EXE creation
       run: |
         if (Test-Path "dist/SMS_Notification_Clients_v2.0.exe") {
           $exe = Get-Item "dist/SMS_Notification_Clients_v2.0.exe"
-          Write-Host "EXE created successfully:"
-          Write-Host "  Name: $($exe.Name)"
+          Write-Host "Success! EXE created:"
+          Write-Host "  File: $($exe.Name)"
           Write-Host "  Size: $([math]::Round($exe.Length / 1MB, 2)) MB"
-          Write-Host "  Created: $($exe.LastWriteTime)"
+          Write-Host "  Path: $($exe.FullName)"
         } else {
-          Write-Error "EXE file not found!"
-          Write-Host "Directory contents:"
+          Write-Error "EXE file was not created!"
+          Write-Host "Contents of dist folder:"
           Get-ChildItem -Path "dist" -ErrorAction SilentlyContinue | Format-Table
           exit 1
         }
         
-    - name: Basic functionality test
-      run: |
-        # Кратък тест дали EXE-то се стартира
-        try {
-          $process = Start-Process -FilePath "dist/SMS_Notification_Clients_v2.0.exe" -ArgumentList "--version" -Wait -PassThru -NoNewWindow
-          Write-Host "EXE startup test completed with exit code: $($process.ExitCode)"
-        } catch {
-          Write-Host "Basic test failed, but this might be expected for GUI applications"
-        }
-        
-    - name: Upload Windows EXE
+    - name: Upload EXE artifact
       uses: actions/upload-artifact@v4
       with:
         name: SMS_Notification_Clients_v2_Windows
         path: dist/SMS_Notification_Clients_v2.0.exe
-        retention-days: 90
         
-    - name: Create GitHub Release
+    - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: dist/SMS_Notification_Clients_v2.0.exe
-        name: "SMS Notification Clients v2.0 - ${{ github.ref_name }}"
+        name: "SMS Notification Clients v2.0"
         body: |
-          # SMS Notification Clients v2.0
+          ## SMS Notification Clients v2.0
           
-          ## New Features
-          - Direct CSV file support (no conversion needed)
+          ### Features
+          - CSV file support (direct processing)
           - Optional MDB to CSV conversion
-          - Improved Windows compatibility
-          - No external dependencies required
+          - Windows compatible (no external dependencies)
+          - Bulgarian text encoding support
           
-          ## System Requirements
-          - Windows 10/11 (64-bit)
-          - No additional software installation needed
+          ### Usage
+          1. Download the .exe file
+          2. Run directly on Windows 10/11
+          3. No installation required
           
-          ## Usage
-          1. Download and run the .exe file
-          2. For MDB files: Use "Convert to CSV" feature first
-          3. For CSV files: Work directly with filtering and export
-          
-          **File size:** ~50-100MB (includes Python runtime and pandas)
-        draft: false
-        prerelease: false
+          File size: ~50-100MB
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
