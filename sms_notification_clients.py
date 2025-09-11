@@ -407,8 +407,35 @@ class KasiExtractor:
             self.convert_button.config(state="disabled")
             self.root.update_idletasks()
             
-            # Четене на таблицата Kasi_all с pandas_access
-            df = mdb.read_table(self.file_path.get(), "Kasi_all")
+            # Опит за четене на таблицата Kasi_all с pandas_access
+            try:
+                df = mdb.read_table(self.file_path.get(), "Kasi_all")
+            except FileNotFoundError as e:
+                # mdb-tools не са налични на системата
+                self.convert_progress.stop()
+                self.convert_button.config(state="normal")
+                messagebox.showerror("MDB Tools не са налични", 
+                                   "За конвертиране на MDB файлове са необходими mdb-tools, които не са инсталирани.\n\n"
+                                   "Решения:\n"
+                                   "1. Конвертирайте файла на Linux/Mac система\n"
+                                   "2. Използвайте Microsoft Access за експорт в CSV\n"
+                                   "3. Работете директно с CSV файлове\n\n"
+                                   "Приложението поддържа пълна функционалност с CSV файлове.")
+                self.update_status_bar("Конвертирането е неуспешно - липсват mdb-tools")
+                return
+            except Exception as e:
+                # Други грешки при четене на MDB
+                self.convert_progress.stop()
+                self.convert_button.config(state="normal")
+                messagebox.showerror("Грешка при четене на MDB", 
+                                   f"Неуспешно четене на MDB файла:\n{str(e)}\n\n"
+                                   "Възможни причини:\n"
+                                   "- Файлът е повреден\n"
+                                   "- Стар формат преди 2007г\n"
+                                   "- Файлът е отворен в друго приложение\n\n"
+                                   "Опитайте да експортирате файла в CSV формат с Microsoft Access.")
+                self.update_status_bar(f"Грешка при четене: {str(e)}")
+                return
             
             # Поправяме кодировката на всички string колони
             for column in df.columns:
