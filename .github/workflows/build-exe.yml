@@ -43,16 +43,47 @@ jobs:
         
     - name: Verify EXE creation
       run: |
-        if (Test-Path "dist/SMS_Notification_Clients_v2.0.exe") {
-          $exe = Get-Item "dist/SMS_Notification_Clients_v2.0.exe"
+        Write-Host "Checking for created EXE files..."
+        
+        # Търсим основния файл
+        $mainExe = "dist/SMS_Notification_Clients_v2.0.exe"
+        $fallbackExe = "dist/SMS_Notification_Clients_v2.0_Fallback.exe"
+        
+        $exeFound = $false
+        $exeFile = $null
+        
+        if (Test-Path $mainExe) {
+          $exeFile = Get-Item $mainExe
+          $exeFound = $true
+          Write-Host "Main EXE created successfully"
+        } elseif (Test-Path $fallbackExe) {
+          $exeFile = Get-Item $fallbackExe
+          $exeFound = $true
+          Write-Host "Fallback EXE created successfully"
+        }
+        
+        if ($exeFound) {
           Write-Host "Success! EXE created:"
-          Write-Host "  File: $($exe.Name)"
-          Write-Host "  Size: $([math]::Round($exe.Length / 1MB, 2)) MB"
-          Write-Host "  Path: $($exe.FullName)"
+          Write-Host "  File: $($exeFile.Name)"
+          Write-Host "  Size: $([math]::Round($exeFile.Length / 1MB, 2)) MB"
+          Write-Host "  Path: $($exeFile.FullName)"
+          
+          # Копираме като стандартно име за upload
+          if ($exeFile.Name -ne "SMS_Notification_Clients_v2.0.exe") {
+            Copy-Item $exeFile.FullName "dist/SMS_Notification_Clients_v2.0.exe"
+            Write-Host "Copied to standard name for upload"
+          }
         } else {
-          Write-Error "EXE file was not created!"
+          Write-Error "No EXE file was created!"
           Write-Host "Contents of dist folder:"
-          Get-ChildItem -Path "dist" -ErrorAction SilentlyContinue | Format-Table
+          if (Test-Path "dist") {
+            Get-ChildItem -Path "dist" | Format-Table
+          } else {
+            Write-Host "dist folder does not exist"
+          }
+          
+          Write-Host "Checking for any .exe files in current directory:"
+          Get-ChildItem -Filter "*.exe" -Recurse | Format-Table FullName, Length
           exit 1
         }
         
