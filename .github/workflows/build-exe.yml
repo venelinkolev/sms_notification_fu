@@ -36,10 +36,10 @@ jobs:
         Write-Host "Available Python files:"
         Get-ChildItem -Filter "*.py" | Format-Table Name, Length
         
-    - name: Build EXE
+    - name: Build EXE with mdbtools-win
       run: |
-        Write-Host "Building EXE from: sms_notification_clients.py"
-        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v2.0" sms_notification_clients.py
+        Write-Host "Building EXE with embedded mdbtools-win..."
+        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v2.0" --add-binary="C:\mdbtools\mdb-tables.exe;mdbtools" --add-binary="C:\mdbtools\mdb-export.exe;mdbtools" --exclude-module=pytest --exclude-module=unittest sms_notification_clients.py
         
     - name: Verify EXE creation
       run: |

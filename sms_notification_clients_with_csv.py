@@ -1,12 +1,11 @@
 """
 Kasi Extractor v2.0 - GUI Приложение за извличане на данни от MDB и CSV
-Поддържа както .mdb файлове (чрез mdbtools-win), така и директна работа с .csv файлове
+Поддържа както .mdb файлове (чрез конвертиране), така и директна работа с .csv файлове
 """
 
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime, date
 import tkinter as tk
-import subprocess
 import json
 import csv
 import sys
@@ -19,90 +18,16 @@ try:
 except ImportError:
     PANDAS_AVAILABLE = False
 
-# Конфигурация за mdbtools-win
-MDBTOOLS_PATH = r"C:\mdbtools"
-
-def get_mdbtools_paths():
-    """Намира пътищата към mdbtools binaries (инсталирани или embedded)"""
-    # Опитваме се да намерим mdbtools binaries
-    
-    # 1. Първо проверяваме инсталираната папка
-    mdb_tables_installed = os.path.join(MDBTOOLS_PATH, "mdb-tables.exe")
-    mdb_export_installed = os.path.join(MDBTOOLS_PATH, "mdb-export.exe")
-    
-    if os.path.exists(mdb_tables_installed) and os.path.exists(mdb_export_installed):
-        return mdb_tables_installed, mdb_export_installed
-    
-    # 2. Ако не, проверяваме embedded версията в PyInstaller bundle
-    if getattr(sys, 'frozen', False):
-        # Работим в .exe файл
-        bundle_dir = sys._MEIPASS
-        mdb_tables_embedded = os.path.join(bundle_dir, "mdbtools", "mdb-tables.exe")
-        mdb_export_embedded = os.path.join(bundle_dir, "mdbtools", "mdb-export.exe")
-        
-        if os.path.exists(mdb_tables_embedded) and os.path.exists(mdb_export_embedded):
-            return mdb_tables_embedded, mdb_export_embedded
-    
-    # 3. За development - проверяваме локалната папка
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    mdb_tables_local = os.path.join(script_dir, "mdbtools", "mdb-tables.exe")
-    mdb_export_local = os.path.join(script_dir, "mdbtools", "mdb-export.exe")
-    
-    if os.path.exists(mdb_tables_local) and os.path.exists(mdb_export_local):
-        return mdb_tables_local, mdb_export_local
-    
-    # Не са намерени
-    return None, None
-
-def check_mdbtools_availability():
-    """Проверява дали mdbtools-win е наличен"""
-    mdb_tables, mdb_export = get_mdbtools_paths()
-    return mdb_tables is not None and mdb_export is not None
-
-def list_mdb_tables(mdb_file_path):
-    """Извлича списък с таблиците в MDB файла чрез mdb-tables.exe"""
-    mdb_tables_exe, _ = get_mdbtools_paths()
-    if mdb_tables_exe is None:
-        raise Exception("mdb-tables.exe не е намерен. Проверете инсталацията на mdbtools-win.")
-    
-    try:
-        result = subprocess.run([mdb_tables_exe, mdb_file_path], 
-                               capture_output=True, text=True, check=True)
-        tables = [table.strip() for table in result.stdout.split('\n') if table.strip()]
-        return tables
-    except subprocess.CalledProcessError as e:
-        raise Exception(f"Грешка при четене на таблиците: {e.stderr}")
-    except FileNotFoundError:
-        raise Exception("mdb-tables.exe не е намерен. Проверете инсталацията на mdbtools-win.")
-
-def export_mdb_table_to_csv_string(mdb_file_path, table_name):
-    """Експортира MDB таблица като CSV string чрез mdb-export.exe"""
-    _, mdb_export_exe = get_mdbtools_paths()
-    if mdb_export_exe is None:
-        raise Exception("mdb-export.exe не е намерен. Проверете инсталацията на mdbtools-win.")
-    
-    try:
-        result = subprocess.run([mdb_export_exe, "-d", ",", table_name, mdb_file_path], 
-                               capture_output=True, text=True, check=True)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        raise Exception(f"Грешка при експорт на таблица '{table_name}': {e.stderr}")
-    except FileNotFoundError:
-        raise Exception("mdb-export.exe не е намерен. Проверете инсталацията на mdbtools-win.")
-
-def read_mdb_table_as_dataframe(mdb_file_path, table_name):
-    """Чете MDB таблица като pandas DataFrame чрез mdbtools-win"""
-    if not PANDAS_AVAILABLE:
-        raise Exception("pandas не е инсталиран!")
-    
-    csv_string = export_mdb_table_to_csv_string(mdb_file_path, table_name)
-    df = pd.read_csv(io.StringIO(csv_string))
-    return df
+try:
+    import pandas_access as mdb
+    PANDAS_ACCESS_AVAILABLE = True
+except ImportError:
+    PANDAS_ACCESS_AVAILABLE = False
 
 class KasiExtractor:
     def __init__(self, root):
         self.root = root
-        self.root.title("SMS Notification Clients v2.0 - mdbtools-win Support")
+        self.root.title("SMS Notification Clients v2.0 - CSV Support")
         self.root.geometry("950x830")  # Увеличена височина за новата секция
         self.root.resizable(True, True)
 
@@ -445,30 +370,24 @@ class KasiExtractor:
                 self.filter_button.config(state="normal")
                 self.full_export_button.config(state="normal")
             elif self.current_file_type == 'mdb':
-                # За MDB файлове активираме само ако има mdbtools-win
-                if check_mdbtools_availability():
+                # За MDB файлове активираме само ако има pandas_access
+                if PANDAS_ACCESS_AVAILABLE:
                     self.filter_button.config(state="normal")
                     self.full_export_button.config(state="normal")
                 else:
-                    self.update_status_bar("⚠️ За MDB файлове е необходим mdbtools-win")
-                    # Все пак активираме конвертирането
-                    self.convert_button.config(state="normal")
+                    self.update_status_bar("⚠️ За MDB файлове е необходим pandas_access")
         else:
             self.status_label.config(text="❌ Файлът не съществува", foreground="red")
             self.test_button.config(state="disabled")
 
     def convert_mdb_to_csv(self):
-        """Конвертира MDB файл в CSV формат чрез mdbtools-win"""
+        """Конвертира MDB файл в CSV формат"""
         if not self.file_path.get() or self.current_file_type != 'mdb':
             messagebox.showerror("Грешка", "Моля изберете MDB файл първо!")
             return
         
-        if not check_mdbtools_availability():
-            messagebox.showerror("mdbtools-win не е наличен", 
-                               f"mdbtools-win не е намерен в {MDBTOOLS_PATH}\n\n"
-                               "Моля инсталирайте mdbtools-win и поставете файловете в:\n"
-                               f"{MDBTOOLS_PATH}\\mdb-tables.exe\n"
-                               f"{MDBTOOLS_PATH}\\mdb-export.exe")
+        if not PANDAS_ACCESS_AVAILABLE:
+            messagebox.showerror("Грешка", "pandas_access не е инсталиран! За конвертиране на MDB файлове е необходим pandas_access.")
             return
         
         # Избор на файл за запис
@@ -488,8 +407,35 @@ class KasiExtractor:
             self.convert_button.config(state="disabled")
             self.root.update_idletasks()
             
-            # Четене на таблицата Kasi_all с mdbtools-win
-            df = read_mdb_table_as_dataframe(self.file_path.get(), "Kasi_all")
+            # Опит за четене на таблицата Kasi_all с pandas_access
+            try:
+                df = mdb.read_table(self.file_path.get(), "Kasi_all")
+            except FileNotFoundError as e:
+                # mdb-tools не са налични на системата
+                self.convert_progress.stop()
+                self.convert_button.config(state="normal")
+                messagebox.showerror("MDB Tools не са налични", 
+                                   "За конвертиране на MDB файлове са необходими mdb-tools, които не са инсталирани.\n\n"
+                                   "Решения:\n"
+                                   "1. Конвертирайте файла на Linux/Mac система\n"
+                                   "2. Използвайте Microsoft Access за експорт в CSV\n"
+                                   "3. Работете директно с CSV файлове\n\n"
+                                   "Приложението поддържа пълна функционалност с CSV файлове.")
+                self.update_status_bar("Конвертирането е неуспешно - липсват mdb-tools")
+                return
+            except Exception as e:
+                # Други грешки при четене на MDB
+                self.convert_progress.stop()
+                self.convert_button.config(state="normal")
+                messagebox.showerror("Грешка при четене на MDB", 
+                                   f"Неуспешно четене на MDB файла:\n{str(e)}\n\n"
+                                   "Възможни причини:\n"
+                                   "- Файлът е повреден\n"
+                                   "- Стар формат преди 2007г\n"
+                                   "- Файлът е отворен в друго приложение\n\n"
+                                   "Опитайте да експортирате файла в CSV формат с Microsoft Access.")
+                self.update_status_bar(f"Грешка при четене: {str(e)}")
+                return
             
             # Поправяме кодировката на всички string колони
             for column in df.columns:
@@ -588,18 +534,14 @@ class KasiExtractor:
             self.update_status_bar(f"Грешка: {str(e)}")
 
     def _test_mdb_file(self):
-        """Тества MDB файл чрез mdbtools-win"""
-        if not check_mdbtools_availability():
-            messagebox.showerror("mdbtools-win не е наличен", 
-                               f"mdbtools-win не е намерен в {MDBTOOLS_PATH}\n\n"
-                               "Моля инсталирайте mdbtools-win и поставете файловете в:\n"
-                               f"{MDBTOOLS_PATH}\\mdb-tables.exe\n"
-                               f"{MDBTOOLS_PATH}\\mdb-export.exe")
+        """Тества MDB файл (запазена оригинална логика)"""
+        if not PANDAS_ACCESS_AVAILABLE:
+            messagebox.showerror("Грешка", "pandas_access не е инсталиран! Моля инсталирайте го за работа с MDB файлове.")
             return
         
         try:
-            # Използваме mdbtools-win
-            tables = list_mdb_tables(self.file_path.get())
+            # Използваме pandas_access
+            tables = list(mdb.list_tables(self.file_path.get()))
             self._show_tables_result(tables)
             
         except Exception as e:
@@ -688,13 +630,6 @@ class KasiExtractor:
                 (df['End_Data_parsed'].dt.date <= end_date.date())
             filtered_df = df[mask]
             
-            # ВАЖНО: Поправяме кодировката на всички string колони ПРЕДИ запазване
-            for column in filtered_df.columns:
-                if filtered_df[column].dtype == 'object':  # string колони
-                    filtered_df[column] = filtered_df[column].astype(str).apply(
-                        lambda x: self.fix_encoding_utf8_to_windows1251(x) if x != 'nan' else ''
-                    )
-            
             # Запазване на филтрираните данни като CSV lines
             self._save_filtered_data_as_lines(filtered_df)
             
@@ -719,10 +654,9 @@ class KasiExtractor:
             return False
 
     def _filter_mdb_data(self):
-        """Филтрира MDB данни чрез mdbtools-win"""
-        if not check_mdbtools_availability():
-            messagebox.showerror("mdbtools-win не е наличен", 
-                               f"mdbtools-win не е намерен в {MDBTOOLS_PATH}\nМоля инсталирайте mdbtools-win.")
+        """Филтрира MDB данни (запазена оригинална логика)"""
+        if not PANDAS_ACCESS_AVAILABLE:
+            messagebox.showerror("Грешка", "pandas_access не е инсталиран!")
             return False
         
         try:
@@ -746,8 +680,8 @@ class KasiExtractor:
         self.root.update_idletasks()
         
         try:
-            # Четене на цялата таблица с mdbtools-win
-            df = read_mdb_table_as_dataframe(self.file_path.get(), "Kasi_all")
+            # Четене на цялата таблица с pandas_access
+            df = mdb.read_table(self.file_path.get(), "Kasi_all")
             
             # Парсиране на датите за филтриране
             start_date = datetime.strptime(start_date_str, '%d.%m.%Y')
@@ -771,13 +705,6 @@ class KasiExtractor:
             mask = (df['End_Data_parsed'].dt.date >= start_date.date()) & \
                 (df['End_Data_parsed'].dt.date <= end_date.date())
             filtered_df = df[mask]
-            
-            # ВАЖНО: Поправяме кодировката на всички string колони ПРЕДИ запазване
-            for column in filtered_df.columns:
-                if filtered_df[column].dtype == 'object':  # string колони
-                    filtered_df[column] = filtered_df[column].astype(str).apply(
-                        lambda x: self.fix_encoding_utf8_to_windows1251(x) if x != 'nan' else ''
-                    )
             
             # Запазване на филтрираните данни като CSV lines
             self._save_filtered_data_as_lines(filtered_df)
@@ -803,7 +730,7 @@ class KasiExtractor:
             return False
 
     def _save_filtered_data_as_lines(self, filtered_df):
-        """Запазва филтрираните данни като CSV lines (кодировката вече е поправена)"""
+        """Запазва филтрираните данни като CSV lines"""
         # Запазване на филтрираните данни като CSV lines
         self.filtered_data_lines = []
         
@@ -813,7 +740,7 @@ class KasiExtractor:
             columns.remove('End_Data_parsed')  # Премахваме помощната колона
         self.filtered_data_lines.append(','.join(f'"{col}"' for col in columns))
         
-        # Данни (кодировката вече е поправена в DataFrame-а)
+        # Данни
         for _, row in filtered_df.iterrows():
             csv_row = []
             for col in columns:
@@ -821,20 +748,12 @@ class KasiExtractor:
                 if pd.isna(value):
                     csv_row.append('""')
                 else:
-                    # Конвертиране към string
-                    str_value = str(value)
-                    
-                    # Премахване на .0 от числата ако са цели числа
-                    if str_value.endswith('.0') and str_value.replace('.0', '').replace('-', '').isdigit():
-                        str_value = str_value[:-2]
-                    
-                    # Escape за CSV (кодировката вече е поправена)
-                    str_value = str_value.replace('"', '""')
+                    str_value = str(value).replace('"', '""')
                     csv_row.append(f'"{str_value}"')
             self.filtered_data_lines.append(','.join(csv_row))
 
     def extract_specific_columns(self):
-        """Извлича конкретните 10 колони от филтрираните данни"""
+        """Извлича конкретните 10 колони от филтрираните данни (запазена оригинална логика)"""
         if not hasattr(self, 'filtered_data_lines') or len(self.filtered_data_lines) < 2:
             messagebox.showerror("Грешка", "Няма филтрирани данни! Първо направете филтрация.")
             return False
@@ -1008,10 +927,9 @@ class KasiExtractor:
             self.update_status_bar(f"Грешка: {str(e)}")
 
     def _export_full_mdb(self):
-        """Експортира цялата MDB таблица в CSV формат чрез mdbtools-win"""
-        if not check_mdbtools_availability():
-            messagebox.showerror("mdbtools-win не е наличен", 
-                               f"mdbtools-win не е намерен в {MDBTOOLS_PATH}\nМоля инсталирайте mdbtools-win.")
+        """Експортира цялата MDB таблица в CSV формат (запазена оригинална логика)"""
+        if not PANDAS_ACCESS_AVAILABLE:
+            messagebox.showerror("Грешка", "pandas_access не е инсталиран!")
             return
         
         # Избор на файл за запис
@@ -1028,8 +946,8 @@ class KasiExtractor:
         try:
             self.update_status_bar("Експортиране на цялата таблица...")
             
-            # Четене на цялата таблица с mdbtools-win
-            df = read_mdb_table_as_dataframe(self.file_path.get(), "Kasi_all")
+            # Четене на цялата таблица с pandas_access
+            df = mdb.read_table(self.file_path.get(), "Kasi_all")
             
             # Поправяме кодировката на всички string колони
             for column in df.columns:
@@ -1070,7 +988,7 @@ class KasiExtractor:
         self.root.quit()
 
     def save_csv(self):
-        """Запис в CSV формат"""
+        """Запис в CSV формат (запазена оригинална логика)"""
         if not hasattr(self, 'extracted_data_lines') or len(self.extracted_data_lines) < 2:
             messagebox.showerror("Грешка", "Няма извлечени данни за запис!")
             return
@@ -1111,7 +1029,7 @@ class KasiExtractor:
             self.update_status_bar("Грешка при записване на CSV")
     
     def save_json(self):
-        """Запис в JSON формат като масив от обекти"""
+        """Запис в JSON формат като масив от обекти (запазена оригинална логика)"""
         if not hasattr(self, 'extracted_data_lines') or len(self.extracted_data_lines) < 2:
             messagebox.showerror("Грешка", "Няма извлечени данни за запис!")
             return
