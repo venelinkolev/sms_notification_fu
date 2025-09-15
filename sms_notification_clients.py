@@ -711,17 +711,27 @@ class KasiExtractor:
 
     def _show_tables_result(self, tables):
         """Показва резултата от намерените таблици"""
-        if "Kasi_all" in tables:
+        # Търсим Kasi таблица case-insensitive
+        kasi_found = False
+        kasi_table_name = None
+        
+        for table in tables:
+            if "kasi" in table.lower():
+                kasi_found = True
+                kasi_table_name = table
+                break
+        
+        if kasi_found:
             messagebox.showinfo("Успех", 
                             f"✅ Връзката е успешна!\n\n"
                             f"Намерени таблици: {len(tables)}\n"
-                            f"Таблица 'Kasi_all': ✅ Намерена")
+                            f"Kasi таблица: ✅ Намерена като '{kasi_table_name}'")
             self.update_status_bar("✅ Базата е готова за работа")
         else:
             messagebox.showwarning("Внимание", 
-                                f"Таблица 'Kasi_all' не е намерена!\n\n"
+                                f"Kasi таблица не е намерена!\n\n"
                                 f"Налични таблици:\n" + "\n".join(tables))
-            self.update_status_bar("⚠️ Таблица 'Kasi_all' не е намерена")
+            self.update_status_bar("⚠️ Kasi таблица не е намерена")
     
     def filter_data(self):
         """Филтрира данните по избраните дати"""
