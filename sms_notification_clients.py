@@ -82,13 +82,57 @@ def export_mdb_table_to_csv_string(mdb_file_path, table_name):
         raise Exception("mdb-export.exe не е намерен. Проверете инсталацията на mdbtools-win.")
     
     try:
+        # Опитваме различни синтакси на mdb-export
+        # Вариант 1: стандартен синтаксис
+        try:
+            result = subprocess.run([mdb_export_exe, "-d", ",", table_name, mdb_file_path], 
+                                   capture_output=True, text=True, check=True, timeout=30)
+            if result.stdout.strip():
+                return result.stdout
+        except subprocess.CalledProcessError:
+            pass
+        
+        # Вариант 2: без delimiter
+        try:
+            result = subprocess.run([mdb_export_exe, table_name, mdb_file_path], 
+                                   capture_output=True, text=True, check=True, timeout=30)
+            if result.stdout.strip():
+                return result.stdout
+        except subprocess.CalledProcessError:
+            pass
+        
+        # Вариант 3: различен ред на параметрите
+        try:
+            result = subprocess.run([mdb_export_exe, mdb_file_path, table_name], 
+                                   capture_output=True, text=True, check=True, timeout=30)
+            if result.stdout.strip():
+                return result.stdout
+        except subprocess.CalledProcessError:
+            pass
+        
+        # Ако нищо не работи, даваме детайлна грешка
         result = subprocess.run([mdb_export_exe, "-d", ",", table_name, mdb_file_path], 
-                               capture_output=True, text=True, check=True)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        raise Exception(f"Грешка при експорт на таблица '{table_name}': {e.stderr}")
+                               capture_output=True, text=True, timeout=30)
+        
+        raise Exception(f"mdb-export не можа да експортира таблица '{table_name}'.\n"
+                       f"Exit code: {result.returncode}\n"
+                       f"Stderr: {result.stderr}\n"
+                       f"Stdout: {result.stdout}")
+        
+    except subprocess.TimeoutExpired:
+        raise Exception(f"Timeout при експорт на таблица '{table_name}' - операцията отне повече от 30 секунди")
     except FileNotFoundError:
         raise Exception("mdb-export.exe не е намерен. Проверете инсталацията на mdbtools-win.")
+    except Exception as e:
+        if "File not found" in str(e):
+            raise Exception(f"MDB файлът или таблицата '{table_name}' не може да бъде достъпена.\n"
+                           f"Възможни причини:\n"
+                           f"- MDB файлът е отворен в друго приложение\n"
+                           f"- Файлът е повреден\n"
+                           f"- Няма права за достъп до файла\n"
+                           f"Оригинална грешка: {str(e)}")
+        else:
+            raise Exception(f"Неочаквана грешка при експорт: {str(e)}")
 
 def read_mdb_table_as_dataframe(mdb_file_path, table_name):
     """Чете MDB таблица като pandas DataFrame чрез mdbtools-win"""
@@ -98,6 +142,62 @@ def read_mdb_table_as_dataframe(mdb_file_path, table_name):
     csv_string = export_mdb_table_to_csv_string(mdb_file_path, table_name)
     df = pd.read_csv(io.StringIO(csv_string))
     return df
+
+def debug_mdbtools_commands(mdb_file_path, table_name):
+    """Debug функция за тестване на mdbtools команди"""
+    print(f"\n=== DEBUG: Тестване на mdbtools команди ===")
+    
+    mdb_tables_exe, mdb_export_exe = get_mdbtools_paths()
+    print(f"mdb-tables.exe: {mdb_tables_exe}")
+    print(f"mdb-export.exe: {mdb_export_exe}")
+    
+    if not mdb_tables_exe or not mdb_export_exe:
+        print("❌ mdbtools binaries не са намерени!")
+        return
+    
+    # Тест 1: Проверка на версиите
+    try:
+        result = subprocess.run([mdb_tables_exe, "--version"], capture_output=True, text=True, timeout=5)
+        print(f"mdb-tables version: {result.stdout.strip() or result.stderr.strip()}")
+    except:
+        print("mdb-tables --version неуспешен")
+    
+    try:
+        result = subprocess.run([mdb_export_exe, "--version"], capture_output=True, text=True, timeout=5)
+        print(f"mdb-export version: {result.stdout.strip() or result.stderr.strip()}")
+    except:
+        print("mdb-export --version неуспешен")
+    
+    # Тест 2: Листване на таблиците
+    try:
+        result = subprocess.run([mdb_tables_exe, mdb_file_path], capture_output=True, text=True, timeout=10)
+        print(f"Таблици: {result.stdout.strip()}")
+    except Exception as e:
+        print(f"Грешка при листване на таблиците: {e}")
+    
+    # Тест 3: Опити за експорт с различни синтакси
+    test_commands = [
+        [mdb_export_exe, "-d", ",", table_name, mdb_file_path],
+        [mdb_export_exe, table_name, mdb_file_path],
+        [mdb_export_exe, mdb_file_path, table_name],
+        [mdb_export_exe, "-Q", table_name, mdb_file_path],
+    ]
+    
+    for i, cmd in enumerate(test_commands, 1):
+        try:
+            print(f"\nТест {i}: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if result.returncode == 0 and result.stdout.strip():
+                print(f"✅ Успех! Първите 200 символа: {result.stdout[:200]}...")
+                break
+            else:
+                print(f"❌ Exit code: {result.returncode}")
+                print(f"Stderr: {result.stderr[:200]}")
+                print(f"Stdout: {result.stdout[:200]}")
+        except Exception as e:
+            print(f"❌ Грешка: {e}")
+    
+    print("=== Край на DEBUG ===\n")
 
 class KasiExtractor:
     def __init__(self, root):
@@ -598,6 +698,9 @@ class KasiExtractor:
             return
         
         try:
+            # DEBUG: Добавяме debug информация
+            debug_mdbtools_commands(self.file_path.get(), "Kasi_all")
+            
             # Използваме mdbtools-win
             tables = list_mdb_tables(self.file_path.get())
             self._show_tables_result(tables)
