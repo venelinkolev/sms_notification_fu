@@ -68,12 +68,20 @@ def list_mdb_tables(mdb_file_path):
     try:
         result = subprocess.run([mdb_tables_exe, mdb_file_path], 
                                capture_output=True, text=True, check=True)
-        tables = [table.strip() for table in result.stdout.split('\n') if table.strip()]
+        
+        # Безопасно обработване на изхода
+        output = result.stdout if result.stdout else ""
+        tables = [table.strip() for table in output.split('\n') if table and table.strip()]
         return tables
+        
     except subprocess.CalledProcessError as e:
-        raise Exception(f"Грешка при четене на таблиците: {e.stderr}")
+        stderr_text = e.stderr if e.stderr else "Няма error детайли"
+        raise Exception(f"Грешка при четене на таблиците: {stderr_text}")
     except FileNotFoundError:
         raise Exception("mdb-tables.exe не е намерен. Проверете инсталацията на mdbtools-win.")
+    except Exception as e:
+        error_text = str(e) if e else "Непозната грешка"
+        raise Exception(f"Неочаквана грешка при листване на таблици: {error_text}")
 
 def export_mdb_table_to_csv_string(mdb_file_path, table_name):
     """Експортира MDB таблица като CSV string чрез mdb-export.exe"""
