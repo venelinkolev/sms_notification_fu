@@ -1,4 +1,4 @@
-name: Build Windows EXE v2.0
+name: Build Windows EXE v2.0 - Simple Build
 
 on:
   push:
@@ -26,64 +26,25 @@ jobs:
         python -m pip install --upgrade pip
         pip install pandas pyinstaller
         
-    - name: Try install pandas_access (optional)
+    - name: Build EXE
       run: |
-        pip install pandas_access
-      continue-on-error: true
-        
-    - name: List Python files
-      run: |
-        Write-Host "Available Python files:"
-        Get-ChildItem -Filter "*.py" | Format-Table Name, Length
-        
-    - name: Build EXE with mdbtools-win
-      run: |
-        Write-Host "Building EXE with embedded mdbtools-win..."
-        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v2.0" --add-binary="C:\mdbtools\mdb-tables.exe;mdbtools" --add-binary="C:\mdbtools\mdb-export.exe;mdbtools" --exclude-module=pytest --exclude-module=unittest sms_notification_clients.py
+        Write-Host "Building SMS Notification Clients v2.0..."
+        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v2.0" --exclude-module=pytest --exclude-module=unittest sms_notification_clients.py
         
     - name: Verify EXE creation
       run: |
-        Write-Host "Checking for created EXE files..."
+        $exeFile = "dist/SMS_Notification_Clients_v2.0.exe"
         
-        # Търсим основния файл
-        $mainExe = "dist/SMS_Notification_Clients_v2.0.exe"
-        $fallbackExe = "dist/SMS_Notification_Clients_v2.0_Fallback.exe"
-        
-        $exeFound = $false
-        $exeFile = $null
-        
-        if (Test-Path $mainExe) {
-          $exeFile = Get-Item $mainExe
-          $exeFound = $true
-          Write-Host "Main EXE created successfully"
-        } elseif (Test-Path $fallbackExe) {
-          $exeFile = Get-Item $fallbackExe
-          $exeFound = $true
-          Write-Host "Fallback EXE created successfully"
-        }
-        
-        if ($exeFound) {
+        if (Test-Path $exeFile) {
+          $exe = Get-Item $exeFile
           Write-Host "Success! EXE created:"
-          Write-Host "  File: $($exeFile.Name)"
-          Write-Host "  Size: $([math]::Round($exeFile.Length / 1MB, 2)) MB"
-          Write-Host "  Path: $($exeFile.FullName)"
-          
-          # Копираме като стандартно име за upload
-          if ($exeFile.Name -ne "SMS_Notification_Clients_v2.0.exe") {
-            Copy-Item $exeFile.FullName "dist/SMS_Notification_Clients_v2.0.exe"
-            Write-Host "Copied to standard name for upload"
-          }
+          Write-Host "  File: $($exe.Name)"
+          Write-Host "  Size: $([math]::Round($exe.Length / 1MB, 2)) MB"
+          Write-Host "  Created: $($exe.LastWriteTime)"
         } else {
-          Write-Error "No EXE file was created!"
+          Write-Error "EXE file was not created!"
           Write-Host "Contents of dist folder:"
-          if (Test-Path "dist") {
-            Get-ChildItem -Path "dist" | Format-Table
-          } else {
-            Write-Host "dist folder does not exist"
-          }
-          
-          Write-Host "Checking for any .exe files in current directory:"
-          Get-ChildItem -Filter "*.exe" -Recurse | Format-Table FullName, Length
+          Get-ChildItem -Path "dist" -ErrorAction SilentlyContinue | Format-Table
           exit 1
         }
         
@@ -92,6 +53,7 @@ jobs:
       with:
         name: SMS_Notification_Clients_v2_Windows
         path: dist/SMS_Notification_Clients_v2.0.exe
+        retention-days: 90
         
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
@@ -104,8 +66,8 @@ jobs:
           
           ### Features
           - CSV file support (direct processing)
-          - Optional MDB to CSV conversion
-          - Windows compatible (no external dependencies)
+          - MDB file support (requires local mdbtools-win installation)
+          - Windows compatible standalone executable
           - Bulgarian text encoding support
           
           ### Usage
@@ -113,6 +75,9 @@ jobs:
           2. Run directly on Windows 10/11
           3. No installation required
           
-          File size: ~50-100MB
+          ### MDB Support
+          For MDB file support, install mdbtools-win binaries in C:\mdbtools\
+          
+          **File size:** ~50-100MB (includes Python runtime and pandas)
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
