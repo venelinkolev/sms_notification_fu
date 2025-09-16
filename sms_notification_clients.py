@@ -28,13 +28,16 @@ MDBTOOLS_AVAILABLE = False
 # Проверяваме дали mdbtools са налични в системата
 try:
     if IS_WINDOWS:
-        # Проверка за mdbtools на Windows
-        result = subprocess.run(['mdb-ver'], capture_output=True, text=True, timeout=5)
+        # На Windows проверяваме с where команда
+        result = subprocess.run(['where', 'mdb-ver'], 
+                              capture_output=True, text=True, timeout=10)
         MDBTOOLS_AVAILABLE = result.returncode == 0
     else:
-        # На Linux проверяваме за mdb-tools
-        result = subprocess.run(['mdb-ver'], capture_output=True, text=True, timeout=5)
+        # На Linux проверяваме с which
+        result = subprocess.run(['which', 'mdb-ver'], 
+                              capture_output=True, text=True, timeout=5)
         MDBTOOLS_AVAILABLE = result.returncode == 0
+        
 except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
     MDBTOOLS_AVAILABLE = False
 
@@ -390,15 +393,40 @@ class KasiExtractor:
             messagebox.showerror("Грешка", f"Грешка при четене на CSV файла:\n{str(e)}")
             self.update_status_bar(f"Грешка: {str(e)}")
 
+    # Добавете тази функция за диагностика
+    def check_mdbtools_detailed():
+        """Детайлна проверка на mdbtools инсталацията"""
+        checks = []
+        
+        # Проверка на основни команди
+        commands = ['mdb-ver', 'mdb-tables', 'mdb-export']
+        for cmd in commands:
+            try:
+                result = subprocess.run([cmd], capture_output=True, text=True, timeout=5)
+                checks.append(f"{cmd}: {'✅' if result.returncode == 0 else '❌'}")
+            except:
+                checks.append(f"{cmd}: ❌ (not found)")
+        
+        # Проверка на PATH
+        path = os.environ.get('PATH', '')
+        checks.append(f"PATH contains mdbtools: {'✅' if 'mdbtools' in path else '❌'}")
+        
+        return "\n".join(checks)
+
     def _test_mdb_file(self):
         """Тества MDB файл с mdbtools"""
         if not MDBTOOLS_AVAILABLE:
-            messagebox.showerror("Грешка", 
-                               "mdbtools не са налични!\n\n"
-                               "Моля инсталирайте mdbtools:\n"
-                               "1. Изтеглете от: https://github.com/mdbtools/mdbtools/releases\n"
-                               "2. Добавете bin директорията в PATH\n"
-                               "3. Рестартирайте приложението")
+            # Показваме детайлна диагностика
+            diagnostic_info = check_mdbtools_detailed()
+            messagebox.showerror(
+                "Грешка - mdbtools не са намерени", 
+                f"mdbtools не са открити в системата!\n\n"
+                f"Диагностична информация:\n{diagnostic_info}\n\n"
+                f"Моля инсталирайте mdbtools:\n"
+                f"1. Изтеглете от: https://github.com/mdbtools/mdbtools/releases\n"
+                f"2. Добавете bin директорията в системния PATH\n"
+                f"3. Рестартирайте приложението"
+            )
             return
         
         try:
