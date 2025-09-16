@@ -1,0 +1,83 @@
+name: Build Windows EXE v2.0 - Simple Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [created]
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas pyinstaller
+        
+    - name: Build EXE
+      run: |
+        Write-Host "Building SMS Notification Clients v2.0..."
+        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v2.0" --exclude-module=pytest --exclude-module=unittest sms_notification_clients.py
+        
+    - name: Verify EXE creation
+      run: |
+        $exeFile = "dist/SMS_Notification_Clients_v2.0.exe"
+        
+        if (Test-Path $exeFile) {
+          $exe = Get-Item $exeFile
+          Write-Host "Success! EXE created:"
+          Write-Host "  File: $($exe.Name)"
+          Write-Host "  Size: $([math]::Round($exe.Length / 1MB, 2)) MB"
+          Write-Host "  Created: $($exe.LastWriteTime)"
+        } else {
+          Write-Error "EXE file was not created!"
+          Write-Host "Contents of dist folder:"
+          Get-ChildItem -Path "dist" -ErrorAction SilentlyContinue | Format-Table
+          exit 1
+        }
+        
+    - name: Upload EXE artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SMS_Notification_Clients_v2_Windows
+        path: dist/SMS_Notification_Clients_v2.0.exe
+        retention-days: 90
+        
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/SMS_Notification_Clients_v2.0.exe
+        name: "SMS Notification Clients v2.0"
+        body: |
+          ## SMS Notification Clients v2.0
+          
+          ### Features
+          - CSV file support (direct processing)
+          - MDB file support (requires local mdbtools-win installation)
+          - Windows compatible standalone executable
+          - Bulgarian text encoding support
+          
+          ### Usage
+          1. Download the .exe file
+          2. Run directly on Windows 10/11
+          3. No installation required
+          
+          ### MDB Support
+          For MDB file support, install mdbtools-win binaries in C:\mdbtools\
+          
+          **File size:** ~50-100MB (includes Python runtime and pandas)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
