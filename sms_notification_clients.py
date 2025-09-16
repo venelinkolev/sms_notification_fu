@@ -541,7 +541,7 @@ class KasiExtractor:
             return False
 
     def _filter_mdb_data(self):
-        """Филтрира MDB данни с mdbtools"""
+        """Филтрира MDB данни с mdbtools и поправя кодировката"""
         if not MDBTOOLS_AVAILABLE:
             messagebox.showerror("Грешка", "mdbtools не са налични!")
             return False
@@ -580,8 +580,15 @@ class KasiExtractor:
                 os.unlink(temp_csv_path)
                 return False
             
-            # Четем CSV с pandas
+            # Четем CSV с pandas и поправяме кодировката
             df = pd.read_csv(temp_csv_path, encoding='utf-8')
+            
+            # Поправяме кодировката на всички текстови колони
+            for column in df.columns:
+                if df[column].dtype == 'object':
+                    df[column] = df[column].astype(str).apply(
+                        lambda x: self.fix_encoding_utf8_to_windows1251(x) if x != 'nan' else ''
+                    )
             
             # Почистваме временния файл
             os.unlink(temp_csv_path)
@@ -803,7 +810,7 @@ class KasiExtractor:
             self.update_status_bar(f"Грешка: {str(e)}")
 
     def _export_full_mdb(self):
-        """Експортира цялата MDB таблица с mdbtools"""
+        """Експортира цялата MDB таблица с mdbtools и поправя кодировката"""
         if not MDBTOOLS_AVAILABLE:
             messagebox.showerror("Грешка", "mdbtools не са налични!")
             return
@@ -821,34 +828,48 @@ class KasiExtractor:
         try:
             self.update_status_bar("Експортиране на цялата таблица...")
             
-            # Използваме mdb-export за директен експорт
+            # Създаваме временен файл за експорт
+            with tempfile.NamedTemporaryFile(suffix='.csv', delete=False, mode='w+', encoding='utf-8') as temp_file:
+                temp_csv_path = temp_file.name
+            
+            # Експортираме с mdb-export
             cmd = ['mdb-export', self.file_path.get(), 'Kasi_all']
             
-            with open(file_path, 'w', encoding='utf-8') as output_file:
+            with open(temp_csv_path, 'w', encoding='utf-8') as output_file:
                 result = subprocess.run(cmd, stdout=output_file, stderr=subprocess.PIPE, text=True, timeout=300)
             
             if result.returncode != 0:
                 messagebox.showerror("Грешка", f"Грешка при експорт на MDB: {result.stderr}")
+                os.unlink(temp_csv_path)
                 return
             
-            # Ако имаме pandas, поправяме кодировката
+            # Четем експортирания CSV и поправяме кодировката
             if PANDAS_AVAILABLE:
-                df = pd.read_csv(file_path, encoding='utf-8')
+                df = pd.read_csv(temp_csv_path, encoding='utf-8')
                 
+                # Поправяме кодировката на всички текстови колони
                 for column in df.columns:
                     if df[column].dtype == 'object':
                         df[column] = df[column].astype(str).apply(
                             lambda x: self.fix_encoding_utf8_to_windows1251(x) if x != 'nan' else ''
                         )
                 
+                # Записваме с поправената кодировка
                 df.to_csv(file_path, index=False, encoding='utf-8')
                 total_rows = len(df)
                 total_columns = len(df.columns)
             else:
+                # Ако няма pandas, копираме директно (но кодировката ще е грешна)
+                import shutil
+                shutil.copy2(temp_csv_path, file_path)
+                
                 # Броим редове без header
                 with open(file_path, 'r', encoding='utf-8') as f:
                     total_rows = sum(1 for _ in f) - 1
                 total_columns = "unknown"
+            
+            # Почистваме временния файл
+            os.unlink(temp_csv_path)
             
             file_size = os.path.getsize(file_path)
             
