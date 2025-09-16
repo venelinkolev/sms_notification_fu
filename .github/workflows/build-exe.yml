@@ -1,4 +1,4 @@
-name: Build Windows EXE v2.0 - Complete Build
+name: Build Windows EXE v2.0 - Simple Build
 
 on:
   push:
@@ -21,115 +21,29 @@ jobs:
       with:
         python-version: '3.10'
         
-    - name: Install Python dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pandas pandas_access pyinstaller
+        pip install pandas pyinstaller
         
-    - name: Install mdbtools-win (for testing)
-      run: |
-        # Download and extract mdbtools for testing in CI environment
-        $mdbtoolsUrl = "https://github.com/mdbtools/mdbtools/releases/download/v0.9.3/mdbtools-win-x64-0.9.3.zip"
-        $outputFile = "mdbtools.zip"
-        
-        Write-Host "Downloading mdbtools..."
-        Invoke-WebRequest -Uri $mdbtoolsUrl -OutFile $outputFile
-        
-        Write-Host "Extracting mdbtools..."
-        Expand-Archive -Path $outputFile -DestinationPath "mdbtools-temp"
-        
-        # Add to PATH for testing
-        $mdbtoolsPath = (Resolve-Path "mdbtools-temp").Path
-        echo "mdbtools_path=$mdbtoolsPath" >> $env:GITHUB_ENV
-        echo "$mdbtoolsPath" >> $env:GITHUB_PATH
-        
-    - name: Test MDB functionality
-      run: |
-        Write-Host "Testing MDB support..."
-        python -c "
-        try:
-            import pandas_access as mdb
-            print('✅ pandas_access imported successfully')
-            
-            # Test basic functionality
-            import tempfile, os
-            print('✅ MDB basic test passed')
-        except Exception as e:
-            print(f'❌ MDB test failed: {e}')
-            exit(1)
-        "
-        
-    - name: Build EXE with proper metadata
+    - name: Build EXE
       run: |
         Write-Host "Building SMS Notification Clients v2.0..."
+        pyinstaller --onefile --windowed --name="SMS_Notification_Clients_v2.0" --exclude-module=pytest --exclude-module=unittest sms_notification_clients.py
         
-        # Create version info file for Windows metadata
-        $versionInfo = @"
-# UTF-8
-VSVersionInfo(
-  ffi=FixedFileInfo(
-    filevers=(2, 0, 0, 0),
-    prodvers=(2, 0, 0, 0),
-    mask=0x3f,
-    flags=0x0,
-    OS=0x40004,
-    fileType=0x1,
-    subtype=0x0,
-    date=(0, 0)
-  ),
-  kids=[
-    StringFileInfo(
-      [
-        StringTable(
-          u'040904B0',
-          [StringStruct(u'CompanyName', u'Kasi Extractor'),
-           StringStruct(u'FileDescription', u'SMS Notification Clients v2.0 - MDB and CSV Extractor'),
-           StringStruct(u'FileVersion', u'2.0.0.0'),
-           StringStruct(u'InternalName', u'SMS_Notification_Clients'),
-           StringStruct(u'LegalCopyright', u'Open Source'),
-           StringStruct(u'OriginalFilename', u'SMS_Notification_Clients_v2.0.exe'),
-           StringStruct(u'ProductName', u'SMS Notification Clients'),
-           StringStruct(u'ProductVersion', u'2.0.0.0')])
-      ]
-    ),
-    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
-  ]
-)
-"@
-        
-        Set-Content -Path "version_info.txt" -Value $versionInfo
-        
-        pyinstaller --onefile --windowed `
-          --name="SMS_Notification_Clients_v2.0" `
-          --version-file=version_info.txt `
-          --add-data="README.md;." `
-          --exclude-module=pytest `
-          --exclude-module=unittest `
-          --hidden-import=pandas_access `
-          --hidden-import=tkinter `
-          sms_notification_clients.py
-        
-    - name: Verify EXE creation and test basic functionality
+    - name: Verify EXE creation
       run: |
         $exeFile = "dist/SMS_Notification_Clients_v2.0.exe"
         
         if (Test-Path $exeFile) {
           $exe = Get-Item $exeFile
-          Write-Host "✅ EXE created successfully:"
+          Write-Host "Success! EXE created:"
           Write-Host "  File: $($exe.Name)"
           Write-Host "  Size: $([math]::Round($exe.Length / 1MB, 2)) MB"
           Write-Host "  Created: $($exe.LastWriteTime)"
-          
-          # Test that EXE can start without errors
-          Write-Host "Testing EXE startup..."
-          $process = Start-Process -FilePath $exeFile -ArgumentList "--help" -PassThru -NoNewWindow -Wait
-          if ($process.ExitCode -eq 0) {
-            Write-Host "✅ EXE starts successfully"
-          } else {
-            Write-Warning "EXE startup test failed, but continuing build"
-          }
         } else {
-          Write-Error "❌ EXE file was not created!"
+          Write-Error "EXE file was not created!"
+          Write-Host "Contents of dist folder:"
           Get-ChildItem -Path "dist" -ErrorAction SilentlyContinue | Format-Table
           exit 1
         }
@@ -141,54 +55,29 @@ VSVersionInfo(
         path: dist/SMS_Notification_Clients_v2.0.exe
         retention-days: 90
         
-    - name: Create Release with detailed instructions
+    - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: dist/SMS_Notification_Clients_v2.0.exe
         name: "SMS Notification Clients v2.0"
         body: |
-          ## 📋 SMS Notification Clients v2.0
+          ## SMS Notification Clients v2.0
           
-          ### ✨ Features
-          - ✅ Direct CSV file processing
-          - ✅ MDB file support (via mdbtools)
-          - ✅ Windows compatible standalone executable
-          - ✅ Bulgarian text encoding support
-          - ✅ Modern GUI interface
+          ### Features
+          - CSV file support (direct processing)
+          - MDB file support (requires local mdbtools-win installation)
+          - Windows compatible standalone executable
+          - Bulgarian text encoding support
           
-          ### 🚀 Usage
+          ### Usage
           1. Download the .exe file
           2. Run directly on Windows 10/11
           3. No installation required
           
-          ### 📊 MDB Support Requirements
-          For full MDB file support, install mdbtools:
+          ### MDB Support
+          For MDB file support, install mdbtools-win binaries in C:\mdbtools\
           
-          **Option 1: Automatic setup**
-          ```bash
-          # Download from official release:
-          # https://github.com/mdbtools/mdbtools/releases
-          ```
-          
-          **Option 2: Manual installation**
-          1. Download mdbtools-win binaries
-          2. Extract to `C:\mdbtools\`
-          3. Add `C:\mdbtools\bin` to your system PATH
-          4. Restart the application
-          
-          ### 📦 Technical Details
-          - **File size:** ~80-120MB (includes Python 3.10 + pandas)
-          - **Architecture:** Windows x64
-          - **Dependencies:** Built-in (no external Python required)
-          
-          ### 🔧 Troubleshooting
-          If MDB files don't work:
-          1. Verify mdbtools are in PATH: Open CMD and type `mdb-ver`
-          2. Restart the application after installing mdbtools
-          3. Ensure MDB files are not password protected
-          
-          ### 📝 Note for CSV Files
-          CSV files work immediately without any additional setup!
+          **File size:** ~50-100MB (includes Python runtime and pandas)
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
